@@ -146,7 +146,7 @@ function local_cohomology(M::SubquoModule{T}, I::MonoidAlgebraIdeal, i::Integer)
 
   #get the injective modules J^{i-1} -> J^i -> J^{i+1}
   Ji_ = inj_res.inj_mods[i]
-  Ji = inj_res.inj_mods[i+1]
+  Ji = inj_res.inj_mods[i + 1]
 
   if inj_res.upto > i # J^{i+1} ≠ 0
     Ji_1 = inj_res.inj_mods[i + 2]
@@ -155,7 +155,7 @@ function local_cohomology(M::SubquoModule{T}, I::MonoidAlgebraIdeal, i::Integer)
   end
 
   #get maps _phi: J^{i-1} -> J^i and _psi: J^i -> J^{i+1}
-  _phi = get_scalar_matrix(kQ, inj_res.cochain_maps[i+1])
+  _phi = get_scalar_matrix(kQ, inj_res.cochain_maps[i + 1])
 
   if inj_res.upto > i
     _psi = get_scalar_matrix(kQ, inj_res.cochain_maps[i + 2])
