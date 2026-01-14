@@ -510,6 +510,10 @@ function gens(I::MonoidAlgebraIdeal{ElemType}) where {ElemType}
   return I.gens::Vector{ElemType}
 end
 
+function number_of_generators(I::MonoidAlgebraIdeal{ElemType}) where {ElemType}
+  return length(I.gens)
+end
+
 function underlying_ideal(I::MonoidAlgebraIdeal)
   if !isdefined(I, :ideal)
     I.ideal = ideal(base_ring(I).algebra, [underlying_element(x) for x in gens(I)])
