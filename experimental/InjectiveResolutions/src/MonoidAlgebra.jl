@@ -298,26 +298,20 @@ parent_type(
 # TODO: Finish implementation of the ring interface! 
 
 @doc raw"""
-    prime_to_face(kQ::Union{MPolyRing,MPolyQuoRing}, zonotope::Polyhedron, F::Polyhedron)
+    prime_of_face(kQ::Union{MPolyRing,MPolyQuoRing}, F::Polyhedron)
 
 Let kQ be a monoid algebra over some semigroup $Q$. Given a face $F$ of the cone $C = \RR_{\geq 0}Q$ of the monoid algebra kQ,
 return the corresponding homogeneous prime ideal
 
-$P_F = k\{Q\setminus F\}.$
-
-The zonotope is the Minkowski sum of all primitive integer vectors along rays of $Q$. 
+$P_F = k\{Q\setminus F\}.$ 
 """
-function prime_to_face(
-  kQ::Union{MPolyRing,MPolyQuoRing}, zonotope::Polyhedron, F::Polyhedron
-)
-  gens = Vector{MPolyDecRingElem}()
-  for lp in lattice_points(zonotope)
-    if !(lp in F) #check if lattice point is in F
-      a_v = [a_p for a_p in lp]
-      push!(gens, monomial_basis(kQ, a_v)[1])
-    end
-  end
-  return ideal(kQ, gens)
+function prime_of_face(kQ::Union{MPolyRing,MPolyQuoRing},F::Polyhedron)
+  #get degrees of generators of kQ
+  G = [degree(Vector{Int},g) for g in Oscar.gens(kQ)]
+
+  #generators of P_F
+  gens_PF = [g for g in G if !is_subset(convex_hull(g),F)]
+  return ideal(kQ,[monomial_basis(kQ,g)[1] for g in gens_PF])
 end
 
 # given a monoid algebra, this function returns the corresponding polyhedral cone
@@ -339,7 +333,7 @@ function get_faces_of_polyhedral_cone(
   for i in 0:dim(P)
     append!(P_faces, faces(P, i))
   end
-  return [FaceQ(prime_to_face(kQ, zonotope, F), F) for F in P_faces]
+  return [FaceQ(prime_of_face(kQ, F), F) for F in P_faces]
 end
 
 # given a polyhedral cone, this function returns the hyperplanes bounding it
