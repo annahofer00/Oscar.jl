@@ -93,6 +93,7 @@ export monoid_algebra
 export monoid_algebra_ideal
 export faces
 export hyperplanes
+export saturation
 
 export irreducible_resolution
 export irreducible_decomposition
@@ -251,7 +252,7 @@ function generators_W_H(kQ::MonoidAlgebra, H::HyperplaneQ, a::Vector{Int})
 
   #get faces of Q intersecting F only origin in Q
   D = Vector{Polyhedron}()
-  for f in kQ.faces
+  for f in faces(kQ)
     if dim(intersect(f.poly, F)) == 0
       push!(D, f.poly)
     end
@@ -712,6 +713,101 @@ function _get_irreducible_ideal(kQ::MonoidAlgebra, J::IndecInj)
   return ideal(kQ, G_W)
 end
 
+#compute the irreducible ideal (kQ unsaturated) (Algorithm 3.15 in HM05) 
+function _get_irreducible_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
+  k = coefficient_ring(kQ)
+  @assert base_ring(J.face.prime) == kQ.algebra
+  @assert is_pointed(kQ) "k[Q] must be pointed"
+
+  #get polyhedron a + ZF
+  F = J.face.poly
+  a = J.vector
+
+  if dim(F) > 0
+    A,b = halfspace_matrix_pair(facets(F))
+    aZF = polyhedron(A,b + a) + polyhedron(A,b - a)
+  else
+    aZF = convex_hull(J.vector)
+  end
+
+  #get saturation of semigroup
+  kQsat = saturation(kQ)
+
+  #compute irreducible ideal in kQsat
+  V = _get_irreducible_ideal(kQsat, J)
+
+  # define map from kQ to kQsat
+  im_phi = [monomial_basis(kQsat, degree(g))[1] for g in gens(kQ.algebra)]
+  phi = Oscar.hom(kQ,kQsat,im_phi)
+
+  # kQ as a kQsat-module
+  I_kQ = ideal(kQsat, [phi(underlying_element(g)) for g in gens(kQ)])
+
+  W = intersect(I_kQ,V) #this is an ideal in kQsat
+
+  B = [degree(w) for w in gens(W)]
+  
+  #intersection of p_D for all facets D of F
+  I_D = Vector{MonoidAlgebraIdeal}()
+  for d in facets(F)
+    append!(I_D, [p.prime for p in faces(kQ) if p.poly == d])
+  end
+  if length(I_D) > 0
+    I = intersect(I_D)
+  else
+    I = ideal(kQ.algebra,[])
+  end
+
+  #get W as an ideal in kQ
+  # check if generators of W lie in kQ!!!
+  V_Q = ideal(kQ.algebra, [monomial_basis(kQ, b)[1] for b in B])
+  _W = V_Q
+
+  while true
+    #get generators mod ZF
+    W_F = mod_quotient(quotient_ring_as_module(_W), J.face.prime)[1]
+    if is_zero(W_F)
+      break
+    end
+    i = 0
+    for g in filter(!is_zero,gens(W_F))
+      #check if g = a + ZF 
+      d_vec = degree(Vector{Int},g)
+      d = degree(g)
+      if is_subset(convex_hull(d_vec),aZF)
+        continue
+      end
+
+      #this can probably be checked quicker!
+      m = monomial_basis(kQsat,d)[1]
+      if ideal_membership(m,underlying_ideal(W))
+        push!(B,d)
+        i = i + 1
+      end
+    end
+    if i ==0
+      break
+    end
+
+    W_bar = quotient_ring_as_module(ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in B]))
+    sat_W_bar = mod_saturate(W_bar,I)
+    append!(B,filter(!is_zero,[degree(g) for g in gens(sat_W_bar)]))
+
+    _W = ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in B])
+  end
+
+  return _W
+end
+
+# workaround for homomorphism between monoid algebras
+function hom(kQ1::MonoidAlgebra, kQ2::MonoidAlgebra, V::Vector)
+  return hom(kQ1.algebra,kQ2.algebra,V)
+end
+
+function monomial_basis(kQ::MonoidAlgebra, a::Vector{Int})
+  return monomial_basis(kQ.algebra, a)
+end
+
 @doc raw"""
     irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{Int,Nothing}=nothing)
 
@@ -1053,6 +1149,7 @@ using .InjectiveResolutions
 export monoid_algebra
 export faces
 export hyperplanes
+export saturation
 
 export irreducible_resolution
 export irreducible_decomposition
