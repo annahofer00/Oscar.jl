@@ -462,6 +462,19 @@ function monoid_algebra(V_Q::Vector{Vector{Int}}, k::Field)
   return monoid_algebra(Matrix{Int}(transpose(matrix(V_Q))), k)
 end
 
+# compute the saturation of a monoid algebra
+function saturation(kQ::MonoidAlgebra)
+  C = kQ.polyhedral_cone
+  k = coefficient_ring(kQ)
+  # compute hilbert basis
+  Csat = matrix(ZZ,hilbert_basis(C))
+  Csat_int = Int.(Csat)
+
+  # the columns generate the saturation
+  Csat_gens = [Csat_int[i,:] for i in 1:size(Csat_int,1)]
+  return monoid_algebra(Csat_gens, k)
+end
+
 function Base.show(io::IO,F::FaceQ)
   print(io,"face corresponding to homogeneous prime ",lowercase(string(F.prime)))
 end
