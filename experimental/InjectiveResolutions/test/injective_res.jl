@@ -142,4 +142,10 @@ end
 
     # inj_res = injective_resolution(I, 3)
     # @test is_exact(inj_res_Q.cochain_complex)
+
+image(inj_res_Q.cochain_maps[1])[1] == kernel(inj_res_Q.cochain_maps[2])[1]
+image(inj_res_Q.cochain_maps[2])[1] == kernel(inj_res_Q.cochain_maps[3])[1]
+dim(quo(kernel(inj_res_Q.cochain_maps[3])[1], image(inj_res_Q.cochain_maps[2])[1])[1])
+
+image(inj_res_Q.cochain_maps[3])[1] == kernel(inj_res_Q.cochain_maps[4])[1]
 end
