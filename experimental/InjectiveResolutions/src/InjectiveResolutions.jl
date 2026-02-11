@@ -137,7 +137,12 @@ end
 
 function compute_Q_graded_part(I::InjMod)
   kQ = I.monoid_algebra
-  irreducible_ideals = [_get_irreducible_ideal(kQ, J) for J in I.indec_injectives]
+  if is_normal(kQ)
+    irreducible_ideals = [_get_irreducible_ideal(kQ, J) for J in I.indec_injectives]
+  else
+    irreducible_ideals = [_get_irreducible_ideal_unsaturated(kQ, J) for J in I.indec_injectives]
+  end
+  # irreducible_ideals = [_get_irreducible_ideal(kQ, J) for J in I.indec_injectives]
   irreducible_comp = [quotient_ring_as_module(Ji) for Ji in irreducible_ideals]
   return direct_sum(irreducible_comp...,task=:none)
 end
@@ -557,6 +562,18 @@ function coefficients(N::SubquoModule{T}, p_F::FaceQ) where {T <: MonoidAlgebraE
       #check (deg(b) + F)\cap (deg(r) + Q) ≠ ∅
       r_p = convex_hull(degree(Vector{Int}, r))
       if dim(intersect(b_p + p_F.poly, r_p + kQ.cone)) >= 0
+        #this check is very ugly...
+        if !is_normal(kQ)
+          I_b = ideal(kQ,monomial_basis(kQ,degree(b)))
+          I_F = monoid_algebra_ideal(kQ,p_F.prime)
+          I_bF = intersect(I_b, I_F)
+
+          #check if x^deg(r) in I_bF
+          if !is_zero(degree(r)) && !is_subset(ideal(kQ.algebra,[monomial_basis(kQ,degree(r))[1]]),underlying_ideal(I_bF))
+            continue
+          end
+        end
+
         x_r = monomial_basis(kQ, degree(r))[1]
         a = lcm(x_Gb..., x_r)
         _r = (a//x_r).num*r #well-defined since a is lcm
@@ -603,7 +620,9 @@ function coefficients(N::SubquoModule{T}, p_F::FaceQ) where {T <: MonoidAlgebraE
         push!(possible_rows, c_K)
       end
     end
-    push!(lambda, possible_rows[1])
+    if !is_empty(possible_rows)
+      push!(lambda, possible_rows[1])      
+    end
   end
   return Bp, matrix(kQ,map(kQ, hcat(lambda...)))
 end
@@ -679,7 +698,11 @@ function irreducible_decomposition(I::MonoidAlgebraIdeal)
   @req is_normal(kQ) "monoid algebra must be normal"
 
   J, _ = irreducible_hull(quotient_ring_as_module(I))
-  return [_get_irreducible_ideal(kQ, I) for I in J.indec_injectives]
+  if is_normal(kQ)
+    return [_get_irreducible_ideal(kQ, I) for I in J.indec_injectives]
+  else
+    return [_get_irreducible_ideal_unsaturated(kQ, I) for I in J.indec_injectives]
+  end
 end
 
 @doc raw"""
@@ -714,7 +737,7 @@ function _get_irreducible_ideal(kQ::MonoidAlgebra, J::IndecInj)
 end
 
 #compute the irreducible ideal (kQ unsaturated) (Algorithm 3.15 in HM05) 
-function _get_irreducible_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
+function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
   k = coefficient_ring(kQ)
   @assert base_ring(J.face.prime) == kQ.algebra
   @assert is_pointed(kQ) "k[Q] must be pointed"
@@ -723,9 +746,10 @@ function _get_irreducible_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
   F = J.face.poly
   a = J.vector
 
-  if dim(F) > 0
+  # get polyhedron a + ZF
+  if dim(F) > 0 
     A,b = halfspace_matrix_pair(facets(F))
-    aZF = polyhedron(A,b + a) + polyhedron(A,b - a)
+    aZF = polyhedron(facets(polyhedron(A,b + (A*a)) + polyhedron(A,b - (A*a))), affine_hull(F + a))
   else
     aZF = convex_hull(J.vector)
   end
@@ -745,7 +769,7 @@ function _get_irreducible_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
 
   W = intersect(I_kQ,V) #this is an ideal in kQsat
 
-  B = [degree(w) for w in gens(W)]
+  B = [degree(w) for w in filter(!is_zero,gens(W))]
   
   #intersection of p_D for all facets D of F
   I_D = Vector{MonoidAlgebraIdeal}()
@@ -759,8 +783,14 @@ function _get_irreducible_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
   end
 
   #get W as an ideal in kQ
-  # check if generators of W lie in kQ!!!
-  V_Q = ideal(kQ.algebra, [monomial_basis(kQ, b)[1] for b in B])
+  _B = []
+  for b in B # check if generators of W lie in kQ!!!
+    m = monomial_basis(kQ,b)
+    if length(m) >0
+      push!(_B,b)
+    end
+  end
+  V_Q = ideal(kQ.algebra, [monomial_basis(kQ, b)[1] for b in _B])
   _W = V_Q
 
   while true
@@ -777,26 +807,21 @@ function _get_irreducible_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
       if is_subset(convex_hull(d_vec),aZF)
         continue
       end
-
-      #this can probably be checked quicker!
-      m = monomial_basis(kQsat,d)[1]
-      if ideal_membership(m,underlying_ideal(W))
-        push!(B,d)
-        i = i + 1
-      end
+      push!(_B,d)
+      i = i + 1
     end
     if i ==0
       break
     end
 
-    W_bar = quotient_ring_as_module(ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in B]))
+    W_bar = quotient_ring_as_module(ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in _B]))
     sat_W_bar = mod_saturate(W_bar,I)
-    append!(B,filter(!is_zero,[degree(g) for g in gens(sat_W_bar)]))
+    append!(_B,filter(!is_zero,[degree(g) for g in gens(sat_W_bar)]))
 
-    _W = ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in B])
+    _W = ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in _B])
   end
 
-  return _W
+  return ideal(kQ,[w for w in gens(_W)])
 end
 
 # workaround for homomorphism between monoid algebras
@@ -858,7 +883,7 @@ over monoid algebra over rational field with cone of dimension 2
 """
 function irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{Int,Nothing}=nothing)
   kQ = base_ring(M)
-  @req is_normal(kQ) "monoid algebra must be normal"
+  # @req is_normal(kQ) "monoid algebra must be normal"
 
   R_Q = kQ.algebra
   Mi = M # current module in resolution
@@ -892,9 +917,11 @@ function irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{I
     hi = gi*fi
 
     #compute cokernel and then simplify
-    Mi_, gi_ = quo(Wi, image(hi)[1]) #cokernel
-    Mi, ji = prune_with_map(Mi_)
-    gi = gi_*inv(ji)
+    Mi, gi = quo(Wi, image(hi)[1]) #cokernel
+    # do we need this step??
+    # Mi, ji = prune_with_map(Mi_)
+    # gi = gi_*inv(ji)
+
     #Mi = Mi_
     #gi = gi_
 
@@ -1045,7 +1072,7 @@ over monoid algebra over rational field with cone of dimension 2
 """
 function injective_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
   kQ = base_ring(M)
-  @req is_normal(kQ) "monoid algebra must be normal"
+  # @req is_normal(kQ) "monoid algebra must be normal"
 
   G = grading_group(kQ)
 
