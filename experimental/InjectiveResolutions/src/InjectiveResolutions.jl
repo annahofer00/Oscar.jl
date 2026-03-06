@@ -543,7 +543,7 @@ end
 
 # get coefficients of m w.r.t. generators of M
 function coefficients_wrt_generators(m::SubquoModuleElem{T}, N::SubquoModule{T}) where {T <: MonoidAlgebraElem}
-  @assert parent(m) == N "m is not an element of N"
+  # @assert parent(m) == N "m is not an element of N"
   kQ = base_ring(N)
   k = coefficient_ring(kQ)
   m_amb = ambient_representative(m) ## why is this needed??
@@ -572,13 +572,15 @@ end
 
 #get all b-relevant relations w.r.t. F
 # check deg(r) + Q = b has a solution
-function relevant_relations(N::SubquoModule{T},p::FaceQ, b::SubquoModuleElem{T}) where {T <: MonoidAlgebraElem}
+function relevant_relations(N::SubquoModule{T},p::FaceQ, b::SubquoModuleElem{T}, c_b) where {T <: MonoidAlgebraElem}
   kQ = base_ring(N)
   R = relations(N)
   rel_rels = Vector{FreeModElem{elem_type(kQ)}}()
   for r in R
     if in_intersection(kQ,degree(Vector{Int},r),degree(Vector{Int},b),p) ## TODO: this is not correct
-      push!(rel_rels,r)
+      if any(i -> !is_zero(coordinates(r)[i]) && !is_zero(c_b[i]),1:ngens(N))
+        push!(rel_rels,r)
+      end
     end
   end
   return rel_rels
@@ -601,6 +603,8 @@ function coefficients_unsaturated(N::SubquoModule{T}, p::FaceQ) where {T <: Mono
   lambda = Vector{Vector{elem_type(k)}}()
   _Bp = Vector{SubquoModuleElem{T}}()
   for b in Bp
+    x_b = monomial_basis(kQ, degree(b))[1]
+
     #get coefficient vector of w.r.t. generators of M
     c_b = coefficients_wrt_generators(b,N)
 
@@ -613,7 +617,7 @@ function coefficients_unsaturated(N::SubquoModule{T}, p::FaceQ) where {T <: Mono
     _N = sub(ambient_free_module(N), [ambient_representative(g) for g in rel_gens])[1]
 
     #get all b-relevant relations w.r.t. F
-    rel_rels = relevant_relations(N, p, b)
+    rel_rels = relevant_relations(N, p, b, c_b)
 
     R_bF = Vector{FreeModElem{elem_type(kQ)}}() #relevant relations
     C_bF = Vector{Vector{elem_type(k)}}() #coefficient vectors of relevant relations
@@ -629,7 +633,7 @@ function coefficients_unsaturated(N::SubquoModule{T}, p::FaceQ) where {T <: Mono
         c_r = Vector{elem_type(k)}()
         for i in 1:ngens(N)
           j = findfirst(g -> g == N[i], rel_gens)
-          if j !== nothing
+          if j !== nothing && !is_zero(x_b*N[i])
             push!(c_r, evaluate(_c_r[j], [1 for _ in 1:ngens(kQ)]))
           else
             push!(c_r, k())
