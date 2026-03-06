@@ -920,7 +920,7 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
   # end
 
   #get saturation of semigroup
-  kQsat = saturation(kQ)
+  kQsat = saturation(kQ) #TODO: this should only be computed once!
 
   #compute irreducible ideal in kQsat
   V = _get_irreducible_ideal(kQsat, J)
@@ -940,7 +940,8 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
   I_D = Vector{MPolyQuoIdeal}()
   for d in facets(F)
     for p in faces(kQ)
-      if p.poly == polyhedron([d],affine_hull(F))
+      _facet = polyhedron([d],affine_hull(F))
+      if _facet != F && p.poly == _facet
         push!(I_D, p.prime)
       end
     end
@@ -987,10 +988,14 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
     end
 
     W_bar = quotient_ring_as_module(ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in _B]))
-    sat_W_bar = mod_saturate(W_bar,I) # TODO: something goes wrong here!
+    sat_W_bar = mod_saturate(W_bar,I)
     append!(_B,filter(!is_zero,[degree(g) for g in gens(sat_W_bar)]))
 
     _W = ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in _B])
+    _G = filter(!is_zero,gens(sat_W_bar))
+    if is_zero(quo(W_bar,_G)[1])
+      break
+    end
   end
 
   return ideal(kQ,[w for w in gens(_W)])
