@@ -108,6 +108,31 @@ export MonoidAlgebra
 export MonoidAlgebraIdeal
 export MonoidAlgebraElem
 
+export compute_shift
+export InjMod
+export IndecInj
+export irreducible_hull
+export Q_graded_part
+export mod_quotient
+export monoid_algebra_ideal
+export FaceQ
+export prime_of_face
+export get_faces_of_polyhedral_cone
+export generators_W_H
+export ZF_basis
+export generates_Zd
+export degrees_of_bass_numbers
+export in_intersection
+export in_semigroup
+export is_in_aZF
+export coefficients_wrt_generators
+export relevant_generators
+export relevant_relations
+export coefficients_unsaturated
+export _get_irreducible_ideal
+export underlying_element
+export mod_saturate
+
 #########################
 # some composite types
 #########################
@@ -270,7 +295,7 @@ function generators_W_H(kQ::MonoidAlgebra, H::HyperplaneQ, a::Vector{Int})
     if dim(I) >= 0
       B_d = [
         a for
-        a in lattice_points(I + kQ.zonotope[1]) if (dim(intersect(convex_hull(a), PaF)) < 0)
+        a in lattice_points(I + zonotope(kQ)[1]) if (dim(intersect(convex_hull(a), PaF)) < 0)
       ]
       append!(B, B_d)
     end
@@ -293,7 +318,7 @@ function degrees_of_bass_numbers(M::SubquoModule{<:MonoidAlgebraElem}, i::Int) #
   degrees = Vector{Vector{Int}}()
   for j in 0:i
     E = ext(k, M, j)
-    for g in gens(E)
+    for g in filter(!is_zero,gens(E))
       push!(degrees, degree(Vector{Int}, g))
     end
   end
@@ -307,7 +332,6 @@ Let $M$ be finitely generated $\mathbb{Z}^d$-graded module over a monoid algebra
 such that all $\mathbb{Z}^d$-degrees of non-zero Bass numbers of $M(-a)$ lie in $Q$. 
 """
 function compute_shift(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
-  # kQ = M.monoid_algebra
   kQ = base_ring(M)
 
   #get all degrees of non-zero Bass numbers up to cohomological degree i
@@ -315,12 +339,19 @@ function compute_shift(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
 
   #sum of all primitive integer vectors along rays of Q
   c = zonotope(kQ)[2]
-
   j = 0
-  while !all([is_subset(convex_hull(b), cone(kQ)) for b in n_bass]) #loop until all degrees of bass numbers lie in Q
-    bass_ = [a_bass + c for a_bass in n_bass]
-    n_bass = bass_
-    j = j + 1
+  if is_normal(kQ)
+    while !all([is_subset(convex_hull(b), cone(kQ)) for b in n_bass]) #loop until all degrees of bass numbers lie in Q
+      bass_ = [a_bass + c for a_bass in n_bass]
+      n_bass = bass_
+      j = j + 1
+    end
+  else
+    while !all([!is_in_semigroup(kQ,b) for b in n_bass]) #loop until all degrees of bass numbers lie in Q
+      bass_ = [a_bass + c for a_bass in n_bass]
+      n_bass = bass_
+      j = j + 1
+    end
   end
   return j*c
 end
@@ -641,23 +672,23 @@ function coefficients_unsaturated(N::SubquoModule{T}, p::FaceQ) where {T <: Mono
 end
 
 @doc raw"""
-    coefficients(N::SubquoModule, p_F::FaceQ)
+    coefficients(N::SubquoModule, p::FaceQ)
 
 Return a subset Bp $\subseteq M$ and a $k$-matrix $\Lambda$ that defines an injective map
 
-$(0 :_N p_F) \xrightarrow{\Lambda} \sum_{b\in Bp}k\{\deg(b) + F - Q\}.$
+$(0 :_N p) \xrightarrow{\Lambda} \sum_{b\in Bp}k\{\deg(b) + F - Q\}.$
 
 This fixes Algorithm 3.6. in [HM05](@cite).
 """
-function coefficients(N::SubquoModule{T}, p_F::FaceQ) where {T <: MonoidAlgebraElem}
+function coefficients(N::SubquoModule{T}, p::FaceQ) where {T <: MonoidAlgebraElem}
   kQ = base_ring(N)
-  @assert base_ring(p_F.prime) == kQ.algebra
+  @assert base_ring(p.prime) == kQ.algebra
 
   #get the coefficient field
   k = coefficient_ring(kQ)
 
-  # get socle degrees of indecomposable injectives kQ{a + F - Q}, i.e. compute a k[F]-basis of the localisation (0 :_M P_F)[ZZ F]
-  Bp = ZF_basis(N, p_F)
+  # get socle degrees of indecomposable injectives kQ{a + F - Q}, i.e. compute a k[F]-basis of the localisation (0 :_M p)[ZZ F]
+  Bp = ZF_basis(N, p)
   if is_empty(Bp)
     return Bp, Hecke.zeros_array(kQ, 1, 1)
   end
@@ -670,19 +701,17 @@ function coefficients(N::SubquoModule{T}, p_F::FaceQ) where {T <: MonoidAlgebraE
     b_amb = ambient_representative(b)
     _c_b = coordinates(N(b_amb)) #coordinates w.r.t. generators of M 
     c_b = [evaluate(_c_b[i], [1 for _ in 1:ngens(kQ)]) for i in 1:ngens(N)]
-    # A possible alternative?
-    # c_b = [only(AbstractAlgebra.coefficients(_c_b[i])) for i in 1:ngens(N)]
 
     #get all relevant generators of N, i.e., check (deg(b) + F) \cap (deg(g) + Q) ≠ ∅
     b_p = convex_hull(degree(Vector{Int}, b))
     G_b = Vector{SubquoModuleElem}()
     for g_N in filter(!is_zero, gens(N))
       g_p = convex_hull(degree(Vector{Int}, g_N))
-      if dim(intersect(b_p + p_F.poly, g_p + kQ.cone)) >= 0
+      if dim(intersect(b_p + p.poly + (-1)*p.poly, g_p + kQ.cone)) >= 0 #maybe this goes wrong??
         push!(G_b, g_N)
       end
     end
-    x_Gb = [monomial_basis(kQ, degree(g))[1] for g in G_b]
+    x_Gb = [monomial_basis(kQ, degree(g))[1] for g in G_b] # do we need this??
     _N = sub(ambient_free_module(N), [ambient_representative(g) for g in G_b])[1]
 
     #get all b-relevant relations w.r.t. F
@@ -691,11 +720,11 @@ function coefficients(N::SubquoModule{T}, p_F::FaceQ) where {T <: MonoidAlgebraE
     for r in R
       #check (deg(b) + F)\cap (deg(r) + Q) ≠ ∅
       r_p = convex_hull(degree(Vector{Int}, r))
-      if dim(intersect(b_p + p_F.poly, r_p + kQ.cone)) >= 0
+      if dim(intersect(b_p + p.poly + (-1)*p.poly, r_p + kQ.cone)) >= 0
         #this check is very ugly...
         if !is_normal(kQ)
-          I_b = ideal(kQ,monomial_basis(kQ,degree(b)))
-          I_F = monoid_algebra_ideal(kQ,p_F.prime)
+          I_b = ideal(kQ,monomial_basis(kQ,degree(b))) # ideal generated by x^deg(b)
+          I_F = monoid_algebra_ideal(kQ,p.prime) # p as a monoid algebra ideal
           I_bF = intersect(I_b, I_F)
 
           #check if x^deg(r) in I_bF
@@ -773,7 +802,8 @@ function irreducible_hull(Mi::SubquoModule{<:MonoidAlgebraElem}, j=0)
 
   P = faces(kQ)
   for p in P
-    Bp, lambda_p = coefficients(N, p)
+    # Bp, lambda_p = coefficients(N, p)
+    Bp, lambda_p = coefficients_unsaturated(N, p)
     for b in Bp
       push!(summands, IndecInj(p, degree(Vector{Int}, b)))
     end
@@ -781,11 +811,12 @@ function irreducible_hull(Mi::SubquoModule{<:MonoidAlgebraElem}, j=0)
     if length(Bp) > 0 # we don't want to add zero vectors to lambda...
       push!(lambda, lambda_p)
     end
+
     M_sat = saturation((ideal(kQ, []) * Mi)[1], monoid_algebra_ideal(kQ,p.prime))
     if !is_zero(p.prime) && !is_zero(M_sat)
       N, _ = quo(Mi, M_sat)
     end
-    if is_zero(N)
+    if is_zero(N) #TODO: should this be zero a some point? 
       break
     end
   end
@@ -868,7 +899,7 @@ end
 
 #compute the irreducible ideal (kQ unsaturated) (Algorithm 3.15 in HM05) 
 function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
-  k = coefficient_ring(kQ)
+  # k = coefficient_ring(kQ)
   @assert base_ring(J.face.prime) == kQ.algebra
   @assert is_pointed(kQ) "k[Q] must be pointed"
 
@@ -876,13 +907,13 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
   F = J.face.poly
   a = J.vector
 
-  # get polyhedron a + ZF
-  if dim(F) > 0 
-    A,b = halfspace_matrix_pair(facets(F))
-    aZF = polyhedron(facets(polyhedron(A,b + (A*a)) + polyhedron(A,b - (A*a))), affine_hull(F + a))
-  else
-    aZF = convex_hull(J.vector)
-  end
+  # # get polyhedron a + ZF
+  # if dim(F) > 0 
+  #   A,b = halfspace_matrix_pair(facets(F))
+  #   aZF = polyhedron(facets(polyhedron(A,b + (A*a)) + polyhedron(A,b - (A*a))), affine_hull(F + a))
+  # else
+  #   aZF = convex_hull(J.vector)
+  # end
 
   #get saturation of semigroup
   kQsat = saturation(kQ)
@@ -902,17 +933,23 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
   B = [degree(w) for w in filter(!is_zero,gens(W))]
   
   #intersection of p_D for all facets D of F
-  I_D = Vector{MonoidAlgebraIdeal}()
+  I_D = Vector{MPolyQuoIdeal}()
   for d in facets(F)
-    append!(I_D, [p.prime for p in faces(kQ) if p.poly == d])
+    for p in faces(kQ)
+      if p.poly == polyhedron([d],affine_hull(F))
+        push!(I_D, p.prime)
+      end
+    end
+    # append!(I_D, [p.prime for p in faces(kQ) if p.poly == polyhedron(d)])
   end
   if length(I_D) > 0
-    I = intersect(I_D)
+    I = intersect(I_D...)
   else
     I = ideal(kQ.algebra,[])
   end
 
   #get W as an ideal in kQ
+  #here one could use is_in_semigroup!
   _B = []
   for b in B # check if generators of W lie in kQ!!!
     m = monomial_basis(kQ,b)
@@ -934,7 +971,8 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
       #check if g = a + ZF 
       d_vec = degree(Vector{Int},g)
       d = degree(g)
-      if is_subset(convex_hull(d_vec),aZF)
+      # if is_subset(convex_hull(d_vec),aZF) #this does not work
+      if is_in_aZF(a,J.face,d_vec)
         continue
       end
       push!(_B,d)
@@ -945,7 +983,7 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
     end
 
     W_bar = quotient_ring_as_module(ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in _B]))
-    sat_W_bar = mod_saturate(W_bar,I)
+    sat_W_bar = mod_saturate(W_bar,I) # TODO: something goes wrong here!
     append!(_B,filter(!is_zero,[degree(g) for g in gens(sat_W_bar)]))
 
     _W = ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in _B])
@@ -1013,6 +1051,7 @@ over monoid algebra over rational field with cone of dimension 2
 """
 function irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{Int,Nothing}=nothing)
   kQ = base_ring(M)
+  @assert generates_Zd(kQ) "The semigroup should generate ZZ^d."
   # @req is_normal(kQ) "monoid algebra must be normal"
 
   R_Q = kQ.algebra
@@ -1042,6 +1081,8 @@ function irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{I
 
     #define injective map Mi -> Wi
     fi = hom(Mi, Wi, matrix(lambda))
+    @assert is_injective(fi) "fi not injective"
+    @assert is_welldefined(fi) "fi not well-defined"
 
     #get boundary map W{i-1} -> Wi
     hi = gi*fi
@@ -1202,6 +1243,7 @@ over monoid algebra over rational field with cone of dimension 2
 """
 function injective_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
   kQ = base_ring(M)
+  @assert generates_Zd(kQ) "The semigroup should generate ZZ^d."
   # @req is_normal(kQ) "monoid algebra must be normal"
 
   G = grading_group(kQ)
@@ -1320,3 +1362,28 @@ export zeroth_local_cohomology
 export MonoidAlgebra
 export MonoidAlgebraIdeal
 export MonoidAlgebraElem
+
+export compute_shift
+export InjMod
+export IndecInj
+export irreducible_hull
+export Q_graded_part
+export mod_quotient
+export monoid_algebra_ideal
+export FaceQ
+export prime_of_face
+export get_faces_of_polyhedral_cone
+export generators_W_H
+export ZF_basis
+export generates_Zd
+export degrees_of_bass_numbers
+export in_intersection
+export in_semigroup
+export is_in_aZF
+export coefficients_wrt_generators
+export relevant_generators
+export relevant_relations
+export coefficients_unsaturated
+export _get_irreducible_ideal
+export underlying_element
+export mod_saturate
