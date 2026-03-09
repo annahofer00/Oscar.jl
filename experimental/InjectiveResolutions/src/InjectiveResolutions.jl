@@ -982,14 +982,17 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
 
     #update W_bar
     W_bar = quotient_ring_as_module(ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in _B]))
-    sat_W_bar = mod_saturate(W_bar,I)
-    append!(_B,filter(!is_zero,[degree(g) for g in gens(sat_W_bar)]))
 
-    # _W = ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in _B])
-    _G = filter(!is_zero,gens(sat_W_bar))
+    if !is_zero(I)
+       sat_W_bar = mod_saturate(W_bar,I)
+      append!(_B,filter(!is_zero,[degree(g) for g in gens(sat_W_bar)]))
 
-    #update W_bar
-    W_bar,_ = quo(W_bar,_G)
+      # _W = ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in _B])
+      _G = filter(!is_zero,gens(sat_W_bar))
+
+      #update W_bar
+      W_bar,_ = quo(W_bar,_G)
+    end
   end
 
   return ideal(kQ,[monomial_basis(kQ,b)[1] for b in _B])
@@ -1092,7 +1095,7 @@ function irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{I
 
     #compute cokernel and then simplify
     Mi, gi = quo(Wi, image(hi)[1]) #cokernel
-    # do we need this step??
+    #TODO: do we need this step??
     # Mi, ji = prune_with_map(Mi_)
     # gi = gi_*inv(ji)
 
