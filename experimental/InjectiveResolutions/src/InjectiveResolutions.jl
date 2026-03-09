@@ -132,6 +132,9 @@ export coefficients_unsaturated
 export _get_irreducible_ideal
 export underlying_element
 export mod_saturate
+export underlying_ideal
+export _get_irreducible_ideal_unsaturated
+export is_in_semigroup
 
 #########################
 # some composite types
@@ -517,7 +520,8 @@ function ZF_basis(M::SubquoModule{<:MonoidAlgebraElem}, p::FaceQ)
       break
     end
   end
-  return filter(!is_zero, B)
+  # return filter(!is_zero, B)
+  return B
 end
 
 function evaluate(
@@ -903,7 +907,6 @@ end
 
 #compute the irreducible ideal (kQ unsaturated) (Algorithm 3.15 in HM05) 
 function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
-  # k = coefficient_ring(kQ)
   @assert base_ring(J.face.prime) == kQ.algebra
   @assert is_pointed(kQ) "k[Q] must be pointed"
 
@@ -911,19 +914,11 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
   F = J.face.poly
   a = J.vector
 
-  # # get polyhedron a + ZF
-  # if dim(F) > 0 
-  #   A,b = halfspace_matrix_pair(facets(F))
-  #   aZF = polyhedron(facets(polyhedron(A,b + (A*a)) + polyhedron(A,b - (A*a))), affine_hull(F + a))
-  # else
-  #   aZF = convex_hull(J.vector)
-  # end
-
   #get saturation of semigroup
   kQsat = saturation(kQ) #TODO: this should only be computed once!
 
   #compute irreducible ideal in kQsat
-  V = _get_irreducible_ideal(kQsat, J)
+  V = _get_irreducible_ideal(kQsat, J) #TODO: should minimal_generators be used here?
 
   # define map from kQ to kQsat
   im_phi = [monomial_basis(kQsat, degree(g))[1] for g in gens(kQ.algebra)]
@@ -934,7 +929,7 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
 
   W = intersect(I_kQ,V) #this is an ideal in kQsat
 
-  B = [degree(w) for w in filter(!is_zero,gens(W))]
+  B = [degree(Vector{Int},w) for w in filter(!is_zero,gens(W))]
   
   #intersection of p_D for all facets D of F
   I_D = Vector{MPolyQuoIdeal}()
@@ -945,7 +940,9 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
         push!(I_D, p.prime)
       end
     end
-    # append!(I_D, [p.prime for p in faces(kQ) if p.poly == polyhedron(d)])
+  end
+  if dim(F) == 1 #the 0-dim face is always a facet of a 1-dim face
+    push!(I_D,faces(kQ)[1].prime)
   end
   if length(I_D) > 0
     I = intersect(I_D...)
@@ -954,20 +951,18 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
   end
 
   #get W as an ideal in kQ
-  #here one could use is_in_semigroup!
   _B = []
   for b in B # check if generators of W lie in kQ!!!
-    m = monomial_basis(kQ,b)
-    if length(m) >0
+    if is_in_semigroup(kQ,b)
       push!(_B,b)
     end
   end
-  V_Q = ideal(kQ.algebra, [monomial_basis(kQ, b)[1] for b in _B])
-  _W = V_Q
+  W = ideal(kQ.algebra, [monomial_basis(kQ, b)[1] for b in _B])
+  W_bar = quotient_ring_as_module(W)
 
-  while true
+  while !is_zero(W_bar)
     #get generators mod ZF
-    W_F = mod_quotient(quotient_ring_as_module(_W), J.face.prime)[1]
+    W_F = mod_quotient(W_bar, J.face.prime)[1]
     if is_zero(W_F)
       break
     end
@@ -975,30 +970,29 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
     for g in filter(!is_zero,gens(W_F))
       #check if g = a + ZF 
       d_vec = degree(Vector{Int},g)
-      d = degree(g)
-      # if is_subset(convex_hull(d_vec),aZF) #this does not work
       if is_in_aZF(a,J.face,d_vec)
         continue
       end
-      push!(_B,d)
+      push!(_B,d_vec)
       i = i + 1
     end
-    if i ==0
+    if i == 0
       break
     end
 
+    #update W_bar
     W_bar = quotient_ring_as_module(ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in _B]))
     sat_W_bar = mod_saturate(W_bar,I)
     append!(_B,filter(!is_zero,[degree(g) for g in gens(sat_W_bar)]))
 
-    _W = ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in _B])
+    # _W = ideal(kQ.algebra,[monomial_basis(kQ,d)[1] for d in _B])
     _G = filter(!is_zero,gens(sat_W_bar))
-    if is_zero(quo(W_bar,_G)[1])
-      break
-    end
+
+    #update W_bar
+    W_bar,_ = quo(W_bar,_G)
   end
 
-  return ideal(kQ,[w for w in gens(_W)])
+  return ideal(kQ,[monomial_basis(kQ,b)[1] for b in _B])
 end
 
 # workaround for homomorphism between monoid algebras
@@ -1396,3 +1390,6 @@ export coefficients_unsaturated
 export _get_irreducible_ideal
 export underlying_element
 export mod_saturate
+export underlying_ideal
+export _get_irreducible_ideal_unsaturated
+export is_in_semigroup
