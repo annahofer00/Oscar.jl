@@ -150,7 +150,7 @@ function degree(
     check::Bool=true
   ) where {RT <: MPolyRing, PT <: MonoidAlgebra{<:FieldElem, RT}}
   !isdefined(a, :elem) && return zero(grading_group(parent(a)))
-  return degree(Vector{Int},underlying_element(a); check)
+  return degree(Vector{Int},underlying_element(a))
 end
 
 grading_group(A::MonoidAlgebra) = grading_group(A.algebra)
@@ -555,6 +555,12 @@ function radical(I::MonoidAlgebraIdeal)
   return MonoidAlgebraIdeal(base_ring(I), radical(underlying_ideal(I)))
 end
 
+#TODO: implement this function
+# function minimal_generating_set(I::MonoidAlgebraIdeal)
+#   _I = underlying_ideal(I)
+#   return minimal_generators(_I)
+# end
+
 dim(I::MonoidAlgebraIdeal) = krull_dim(underlying_ideal(I))
 krull_dim(I::MonoidAlgebraIdeal) = krull_dim(underlying_ideal(I))
 
@@ -624,6 +630,7 @@ function Base.show(io::IO,I::MonoidAlgebraIdeal)
   print(io,underlying_ideal(I))
 end
 
+# Let p in \ZZ^d, a in \ZZ^d and F a face of a semigroup Q. This function checks if p is in a + ZF.
 function is_in_aZF(a::Vector{Int},F::FaceQ,p::Vector{Int})
     if F.A === nothing
         return a == p
