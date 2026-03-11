@@ -582,9 +582,9 @@ function relevant_relations(N::SubquoModule{T},p::FaceQ, b::SubquoModuleElem{T},
   rel_rels = Vector{FreeModElem{elem_type(kQ)}}()
   for r in R
     if in_intersection(kQ,degree(Vector{Int},r),degree(Vector{Int},b),p) ## TODO: this is not correct
-      if any(i -> !is_zero(coordinates(r)[i]) && !is_zero(c_b[i]),1:ngens(N))
+      # if any(i -> !is_zero(coordinates(r)[i]) && !is_zero(c_b[i]),1:ngens(N))
         push!(rel_rels,r)
-      end
+      # end
     end
   end
   return rel_rels
@@ -636,15 +636,17 @@ function coefficients_unsaturated(N::SubquoModule{T}, p::FaceQ) where {T <: Mono
         _c_r = Oscar.coordinates(_N(_r))
         c_r = Vector{elem_type(k)}()
         for i in 1:ngens(N)
-          j = findfirst(g -> g == N[i], rel_gens)
-          if j !== nothing && !is_zero(x_b*N[i])
-            push!(c_r, evaluate(_c_r[j], [1 for _ in 1:ngens(kQ)]))
+          j = findfirst(g -> ambient_representative(g) == ambient_representative(N[i]), rel_gens) #TODO: why am I doing this??
+          if j == i
+            push!(c_r, evaluate(_c_r[i], [1 for _ in 1:ngens(kQ)]))
           else
             push!(c_r, k())
           end
         end
-        push!(C_bF, c_r)
-        push!(R_bF, r)
+        if !is_zero(c_r) # only add non-trivial relations
+          push!(C_bF, c_r)
+          push!(R_bF, r)
+        end
       end
     end
 
