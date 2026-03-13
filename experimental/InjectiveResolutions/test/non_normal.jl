@@ -35,6 +35,16 @@ irr_res = irreducible_resolution(M,2)
 #TODO: this does not work yet
 inj_res = injective_resolution(KQ,2)
 
+# Example 13.27 in Miller-Sturmfels
+kQ = monoid_algebra([[0,0,1],[1,0,1],[3,0,1],[0,1,1],[1,1,1]],QQ)
+KQ = quotient_ring_as_module(ideal(kQ,[]))
+M = twist(KQ,-grading_group(kQ)([3,3,3]))
+irr_res = irreducible_resolution(M,3)
+
+# face of semigroup
+kF = monoid_algebra([[1,0,1]],QQ)
+KF = quotient_ring_as_module(ideal(kF,[]))
+
 # #injective resolution of hole
 # hole = 
 
