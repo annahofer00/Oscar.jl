@@ -818,8 +818,12 @@ function irreducible_hull(Mi::SubquoModule{<:MonoidAlgebraElem}, j=0)
 
   P = faces(kQ)
   for p in P
-    # Bp, lambda_p = coefficients(N, p)
-    Bp, lambda_p = coefficients_unsaturated(N, p)
+    if is_normal(kQ)
+      Bp, lambda_p = coefficients(N, p)
+    else
+      Bp, lambda_p = coefficients_unsaturated(N, p)
+    end
+    
     for b in Bp
       push!(summands, IndecInj(p, degree(Vector{Int}, b)))
     end

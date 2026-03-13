@@ -299,9 +299,9 @@ function compute_taus(kQ::MonoidAlgebra, J::IndecInj...)
     push!(_tau, tau_i)
   end
 
-  #transform _tau consisting of length(kQ.hyperplanes)-lists into a list of length(J) (divide by coordinate index)
+  #transform _tau consisting of length(hyperplanes(kQ))-lists into a list of length(J) (divide by coordinate index)
   tau = []
-  for i in 1:length(kQ.hyperplanes)
+  for i in 1:length(hyperplanes(kQ))
     push!(tau, [t[i] for t in _tau])
   end
   return tau
@@ -316,8 +316,8 @@ Return a finite set of positive halfspaces such that $Q$ is the intersection of 
     The corresponding semigroup $Q$ must be saturated. 
 """
 function get_halfspace_eq(kQ::MonoidAlgebra)
-  A, _ = halfspace_matrix_pair(facets(kQ.cone))
-  return [[kQ.hyperplanes[i].hyperplane, A[i, :]] for i in 1:length(kQ.hyperplanes)]
+  A, _ = halfspace_matrix_pair(facets(cone(kQ)))
+  return [[hyperplanes(kQ)[i].hyperplane, A[i, :]] for i in 1:length(hyperplanes(kQ))]
 end
 
 @doc raw"""
@@ -580,7 +580,7 @@ function maps_needed(kQ::MonoidAlgebra, S_A::Vector{SectorLC})
     issubset(s2.A, s1.A) || continue
     s1.index_vector >= s2.index_vector || continue # check if B \subseteq A and (l_1, ..., l_n) <= (l_1', ..., l_n')
       K = s2.sector + (-1)*s1.sector # minkowski sum (|Delta_B - \Delta_A)
-      if dim(intersect(K, kQ.cone)) > -1 # check if Q \cap (|Delta_B - \Delta_A) \neq \emptyset
+      if dim(intersect(K, cone(kQ))) > -1 # check if Q \cap (|Delta_B - \Delta_A) \neq \emptyset
         # compute the map x^{B - A}: H_A -> H_B
         A = vcat(s1.A...)
         B = vcat(s2.A...)
