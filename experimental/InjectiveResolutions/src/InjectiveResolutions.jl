@@ -1096,13 +1096,13 @@ function irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{I
     hi = gi*fi
 
     #compute cokernel and then simplify
-    Mi, gi = quo(Wi, image(hi)[1]) #cokernel
+    Mi_, gi_ = quo(Wi, image(hi)[1]) #cokernel
     #TODO: do we need this step??
-    # Mi, ji = prune_with_map(Mi_)
-    # gi = gi_*inv(ji)
+    Mi, ji = prune_with_map(Mi_)
+    gi = gi_*inv(ji)
 
-    #Mi = Mi_
-    #gi = gi_
+    # Mi = Mi_
+    # gi = gi_
 
     any(is_zero, relations(Mi)) && error("there must not be trivial relations")
     #fix modules with "zero" relations
