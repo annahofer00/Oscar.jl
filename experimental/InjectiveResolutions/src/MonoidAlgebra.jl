@@ -12,6 +12,7 @@
 # `ModuleGens` directly; see `ModuleFunctionality.jl` for that. 
 ########################################################################
 
+
 struct FaceQ # face of semigroup 
   prime::Union{MPolyIdeal,MPolyQuoIdeal} #homogeneous prime corresponding to face
   poly::Polyhedron  #face as polyhedron
@@ -23,14 +24,113 @@ struct HyperplaneQ # a hyperplane bounding the cone RR_{\geq 0}Q
   A::Matrix{Int}
   b::Vector{Int}
 end
+@attributes mutable struct AffineSemigroup # affine semigroup
+  generators::Matrix{Int}  # semigroup generators as columns of the matrix
+  pointed::Union{Nothing,Bool} # cone pointed
+  polyhedral_cone::Union{Nothing,Cone{QQFieldElem}} # cone RR_>=0 Q
+  cone::Union{Nothing,Polyhedron} # cone as polyhedron
+  faces::Union{Nothing,Vector{FaceQ}} # faces of the cone
+  hyperplanes::Union{Nothing,Vector{HyperplaneQ}} # hyperplanes bounding the cone
+  zonotope::Union{Nothing,Tuple{Polyhedron,Vector{Int}}} # zonotope
+
+  function AffineSemigroup(
+    generators::Matrix{Int}, 
+    pointed::Union{Nothing,Bool}=nothing,
+    polyhedral_cone::Union{Nothing,Cone{QQFieldElem}}=nothing,
+    cone::Union{Nothing,Polyhedron}=nothing,
+    faces::Union{Nothing,Vector{FaceQ}}=nothing,
+    hyperplanes::Union{Nothing,Vector{HyperplaneQ}}=nothing,
+    zonotope::Union{Nothing,Tuple{Polyhedron,Vector{Int}}}=nothing
+  )
+    return new(generators, pointed, polyhedral_cone, cone, faces, hyperplanes, zonotope)
+  end
+end
+
+#TODO: write a nice print function
+function Base.show(io::IO, S::AffineSemigroup)
+  print(io, "affine semigroup with generators: ", gens(S))
+end
+
+function gens(Q::AffineSemigroup)
+  return [Q.generators[:, i] for i in 1:size(Q.generators, 2)]
+end
+
+function rank(Q::AffineSemigroup)
+  return rank(matrix(ZZ,Q.generators))
+end
+
+function ambient_dimension(Q::AffineSemigroup)
+  return size(Q.generators, 1)
+end
+
+@doc raw"""
+    affine_semigroup(A::MonoidAlgebra)
+
+Given a monoid algebra kQ, this function returns the underlying affine semigroup Q.
+"""
+function affine_semigroup(A::MonoidAlgebra)
+  if isnothing(A.affine_semigroup) #TODO: this case should not occur
+    # Compute semigroup generators from ring grading
+    D = [degree(Vector{Int}, g) for g in gens(A.algebra)]
+    M_Q = hcat(D...)
+    A.affine_semigroup = AffineSemigroup(M_Q, nothing, nothing, nothing, nothing, nothing, nothing)
+  end
+  return A.affine_semigroup::AffineSemigroup
+end
+
+@doc raw"""
+    affine_semigroup(M::Matrix{Int})
+
+Create an affine semigroup from a matrix of integer generators (as columns).
+"""
+function affine_semigroup(M::Matrix{Int})
+  return AffineSemigroup(M, nothing, nothing, nothing, nothing, nothing, nothing)
+end
+
+@doc raw"""
+    is_pointed(S::AffineSemigroup)
+
+Given an affine semigroup, check if its cone is pointed.
+"""
+function is_pointed(S::AffineSemigroup)
+  if isnothing(S.pointed)
+    S.pointed = is_pointed(polyhedral_cone(S))
+  end
+  return S.pointed::Bool
+end
+
+function polyhedral_cone(S::AffineSemigroup)
+  if isnothing(S.polyhedral_cone)
+    S.polyhedral_cone = positive_hull(gens(S))
+  end
+  return S.polyhedral_cone::Cone{QQFieldElem}
+end
+
+function cone(S::AffineSemigroup)
+  if isnothing(S.cone)
+    S.cone = polyhedron(polyhedral_cone(S))
+  end
+  return S.cone::Polyhedron
+end
+
+function hyperplanes(S::AffineSemigroup)
+  if isnothing(S.hyperplanes)
+    S.hyperplanes = get_bounding_hyperplanes(cone(S))
+  end
+  return S.hyperplanes::Vector{HyperplaneQ}
+end
+
+function zonotope(S::AffineSemigroup)
+  if isnothing(S.zonotope)
+    S.zonotope = get_zonotope(cone(S))
+  end
+  return S.zonotope::Tuple{Polyhedron,Vector{Int}}
+end
+
 @attributes mutable struct MonoidAlgebra{CoeffType,AlgebraType} <: Ring # monoid algebra with associated data
   algebra::AlgebraType
-  pointed::Union{Nothing,Bool} #cone pointed
-  polyhedral_cone::Cone{QQFieldElem}
-  cone::Polyhedron
-  faces::Vector{FaceQ}
-  hyperplanes::Vector{HyperplaneQ}
-  zonotope::Tuple{Polyhedron,Vector{Int}}
+  affine_semigroup::Union{Nothing,AffineSemigroup} #affine semigroup
+  is_normal::Union{Nothing,Bool} #normality of the semigroup ring
 
   function MonoidAlgebra(
     A::AlgebraType; check::Bool=true
@@ -40,18 +140,28 @@ end
     gg_Q = grading_group(A)
     @check is_free(gg_Q) && is_abelian(gg_Q) "given algebra is not a monoid algebra"
     kk = coefficient_ring(A)
-    result = new{elem_type(kk),AlgebraType}(A, nothing)
+    result = new{elem_type(kk),AlgebraType}(A,nothing, nothing)
   end
 end
 
 is_graded(A::MonoidAlgebra) = true
 is_zm_graded(A::MonoidAlgebra) = true
 
+@doc raw"""
+    semigroup_generators(A::MonoidAlgebra)
+
+Given a monoid algebra kQ, this function returns the matrix of semigroup generators as columns.
+"""
+function semigroup_generators(A::MonoidAlgebra)
+  return affine_semigroup(A).generators
+end
+
 function polyhedral_cone(A::MonoidAlgebra)
-  if !isdefined(A, :polyhedral_cone)
-    A.polyhedral_cone = get_polyhedral_cone(A.algebra)
+  semigroup = affine_semigroup(A)
+  if isnothing(semigroup.polyhedral_cone)
+    semigroup.polyhedral_cone = get_polyhedral_cone(A.algebra)
   end
-  return A.polyhedral_cone
+  return semigroup.polyhedral_cone::Cone{QQFieldElem}
 end
 
 @doc raw"""
@@ -61,10 +171,11 @@ Given a monoid algebra with underlying monoid $Q$, this function returns the pol
 
 """
 function cone(A::MonoidAlgebra)
-  if !isdefined(A, :cone)
-    A.cone = polyhedron(polyhedral_cone(A))
+  semigroup = affine_semigroup(A)
+  if isnothing(semigroup.cone)
+    semigroup.cone = polyhedron(polyhedral_cone(A))
   end
-  return A.cone
+  return semigroup.cone::Polyhedron
 end
 
 
@@ -74,31 +185,50 @@ end
 Given a monoid algebra with underlying monoid $Q$, this function a list of all faces of the polyhedral cone $\mathbb{R}_{\geq 0}Q$ with their corresponding homogeneous prime ideals. 
 """
 function faces(A::MonoidAlgebra)
-  if !isdefined(A, :faces)
-    A.faces = get_faces_of_polyhedral_cone(A.algebra, cone(A))
+  semigroup = affine_semigroup(A)
+  if isnothing(semigroup.faces)
+    # Compute all faces of the cone
+    P = cone(A)
+    P_faces = Vector{Polyhedron}()
+    for i in 0:dim(P)
+      append!(P_faces, Oscar.faces(P, i))
+    end
+    
+    # Get semigroup generators
+    D = semigroup.generators
+    
+    # For each face, compute its semigroup generators and prime ideal
+    _faces = Vector{FaceQ}()
+    for F in P_faces
+      # Determine which generators lie on this face
+      A_face = [D[:,i] for i in 1:size(D,2) if is_subset(convex_hull(D[:,i]), F)]
+      if is_empty(A_face)
+        face_gens = nothing
+      else
+        face_gens = hcat(A_face...)
+      end
+      
+      # Compute the corresponding homogeneous prime ideal
+      prime = prime_of_face(A.algebra, F)
+      push!(_faces, FaceQ(prime, F, face_gens))
+    end
+    
+    semigroup.faces = _faces
   end
-  return A.faces
+  return semigroup.faces::Vector{FaceQ}
 end
 
 function hyperplanes(A::MonoidAlgebra)
-  if !isdefined(A, :hyperplanes)
-    A.hyperplanes = get_bounding_hyperplanes(cone(A))
-  end
-  return A.hyperplanes
+  return hyperplanes(affine_semigroup(A))
 end
 
 function is_pointed(A::MonoidAlgebra)
-  if isnothing(A.pointed)
-    A.pointed = is_pointed(polyhedral_cone(A))
-  end
-  return A.pointed::Bool
+  semigroup = affine_semigroup(A)
+  return is_pointed(semigroup)
 end
 
 function zonotope(A::MonoidAlgebra)
-  if !isdefined(A, :zonotope)
-    A.zonotope = get_zonotope(cone(A))
-  end
-  return A.zonotope
+  return zonotope(affine_semigroup(A))
 end
 
 coefficient_ring(A::MonoidAlgebra) = coefficient_ring(A.algebra)
@@ -357,9 +487,7 @@ function get_faces_of_polyhedral_cone(
   return _faces 
 end
 
-# given a polyhedral cone, this function returns the hyperplanes bounding it
-# INPUT:    polyhedral cone C
-# OUTPUT:   set of hyperplanes bounding C
+
 function get_bounding_hyperplanes(P::Polyhedron)
   hyperplanes = Vector{HyperplaneQ}()
   for f in facets(Polyhedron, P)
@@ -453,11 +581,15 @@ function monoid_algebra(M_Q::Matrix{Int}, k::Field)
   map_T_R = hom(R, T, targ)
 
   # return monoid algebra
-   if is_zero(ideal(gens(kernel(map_T_R))))
-    return MonoidAlgebra(R)
-   else
-    return  MonoidAlgebra(quo(R, ideal(gens(kernel(map_T_R))))[1])
-   end
+  if is_zero(ideal(gens(kernel(map_T_R))))
+    kQ = MonoidAlgebra(R)
+  else
+    kQ = MonoidAlgebra(quo(R, ideal(gens(kernel(map_T_R))))[1])
+  end
+  
+  # store the affine semigroup with empty lazy-loaded fields
+  kQ.affine_semigroup = AffineSemigroup(M_Q, nothing, nothing, nothing, nothing, nothing, nothing)
+  return kQ
 end
 
 @doc raw"""
