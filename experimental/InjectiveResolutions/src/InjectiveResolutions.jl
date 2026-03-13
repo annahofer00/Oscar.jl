@@ -1316,35 +1316,38 @@ false
   #
   # line 666 ff. of https://github.com/Macaulay2/M2/blob/2565455411d15a3386204aa62a00e20ee5c0e99f/M2/Macaulay2/packages/IntegralClosure.m2 
   # on Apr 25, 2025.
-  R = A.algebra::MPolyQuoRing
-  R_B = base_ring(R)
-  I = modulus(R)
-  M = quotient_ring_as_module(I)
-  n = codim(I)
+  if isnothing(A.is_normal)
+    R = A.algebra::MPolyQuoRing
+    R_B = base_ring(R)
+    I = modulus(R)
+    M = quotient_ring_as_module(I)
+    n = codim(I)
 
-  # Check the S2 condition
-  test_range = 0:(krull_dim(R_B) - n - 2)
+    # Check the S2 condition
+    test_range = 0:(krull_dim(R_B) - n - 2)
 
-  for j in test_range
-    # Check if codimension of Ext^{j+n+1} is at least j+n+3
-    # get ext:
-    E = ext(M,graded_free_module(R_B, 1),j + n + 1)
-    # work around issue https://github.com/oscar-system/Oscar.jl/issues/4884
-    if is_zero(E)
-      d = -1
-    else 
-      d = krull_dim(E)
+    for j in test_range
+      # Check if codimension of Ext^{j+n+1} is at least j+n+3
+      # get ext:
+      E = ext(M,graded_free_module(R_B, 1),j + n + 1)
+      # work around issue https://github.com/oscar-system/Oscar.jl/issues/4884
+      if is_zero(E)
+        d = -1
+      else 
+        d = krull_dim(E)
+      end
+      cod = krull_dim(R_B) - d
+      if cod < j+n+3
+          return false
+      end               # S2 condition not satisfied
     end
-    cod = krull_dim(R_B) - d
-    if cod < j+n+3
-        return false
-    end               # S2 condition not satisfied
-  end
 
-  Jac = ideal(R, minors(map_entries(R, jacobian_matrix(gens(modulus(R)))), n))  # Compute minors of the Jacobian
-  d = krull_dim(Jac)                   # Get dimension of the Jacobian
-  d < 0 && return true            # Handle negative dimensions
-  return (krull_dim(R) - d >= 2)       # Check the condition
+    Jac = ideal(R, minors(map_entries(R, jacobian_matrix(gens(modulus(R)))), n))  # Compute minors of the Jacobian
+    d = krull_dim(Jac)                   # Get dimension of the Jacobian
+    d < 0 && return true            # Handle negative dimensions
+    A.is_normal = (krull_dim(R) - d >= 2)       # Check the condition
+  end
+  return A.is_normal
 end
 
 is_normal(A::MonoidAlgebra{<:FieldElem, <:MPolyRing}) = true
