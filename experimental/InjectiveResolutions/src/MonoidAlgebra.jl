@@ -46,9 +46,19 @@ end
   end
 end
 
-#TODO: write a nice print function
 function Base.show(io::IO, S::AffineSemigroup)
-  print(io, "affine semigroup with generators: ", gens(S))
+  print(io, "affine semigroup in ambient dimension ", ambient_dimension(S))
+end
+
+function Base.show(io::IO, ::MIME"text/plain", S::AffineSemigroup)
+  print(io, "affine semigroup with generators: ")
+  gens_list = gens(S)
+  for (i, s) in enumerate(gens_list)
+    print(io, s)
+    if i < length(gens_list)
+      print(io, ", ")
+    end
+  end
 end
 
 function gens(Q::AffineSemigroup)
@@ -61,21 +71,6 @@ end
 
 function ambient_dimension(Q::AffineSemigroup)
   return size(Q.generators, 1)
-end
-
-@doc raw"""
-    affine_semigroup(A::MonoidAlgebra)
-
-Given a monoid algebra kQ, this function returns the underlying affine semigroup Q.
-"""
-function affine_semigroup(A::MonoidAlgebra)
-  if isnothing(A.affine_semigroup) #TODO: this case should not occur
-    # Compute semigroup generators from ring grading
-    D = [degree(Vector{Int}, g) for g in gens(A.algebra)]
-    M_Q = hcat(D...)
-    A.affine_semigroup = AffineSemigroup(M_Q, nothing, nothing, nothing, nothing, nothing, nothing)
-  end
-  return A.affine_semigroup::AffineSemigroup
 end
 
 @doc raw"""
@@ -146,6 +141,21 @@ end
 
 is_graded(A::MonoidAlgebra) = true
 is_zm_graded(A::MonoidAlgebra) = true
+
+@doc raw"""
+    affine_semigroup(A::MonoidAlgebra)
+
+Given a monoid algebra kQ, this function returns the underlying affine semigroup Q.
+"""
+function affine_semigroup(A::MonoidAlgebra)
+  if isnothing(A.affine_semigroup) #TODO: this case should not occur
+    # Compute semigroup generators from ring grading
+    D = [degree(Vector{Int}, g) for g in gens(A.algebra)]
+    M_Q = hcat(D...)
+    A.affine_semigroup = AffineSemigroup(M_Q, nothing, nothing, nothing, nothing, nothing, nothing)
+  end
+  return A.affine_semigroup::AffineSemigroup
+end
 
 @doc raw"""
     semigroup_generators(A::MonoidAlgebra)
@@ -617,7 +627,7 @@ end
 
 # compute the saturation of a monoid algebra
 function saturation(kQ::MonoidAlgebra)
-  C = kQ.polyhedral_cone
+  C = polyhedral_cone(kQ)
   k = coefficient_ring(kQ)
   # compute hilbert basis
   Csat = matrix(ZZ,hilbert_basis(C))
