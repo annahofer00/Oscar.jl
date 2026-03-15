@@ -83,6 +83,15 @@ function affine_semigroup(M::Matrix{Int})
 end
 
 @doc raw"""
+    affine_semigroup(V_Q::Vector{Vector{Int}})
+
+Create an affine semigroup.
+"""
+function affine_semigroup(V_Q::Vector{Vector{Int}})
+  return affine_semigroup(hcat(V_Q...))
+end
+
+@doc raw"""
     is_pointed(S::AffineSemigroup)
 
 Given an affine semigroup, check if its cone is pointed.
@@ -623,6 +632,15 @@ Quotient
 """
 function monoid_algebra(V_Q::Vector{Vector{Int}}, k::Field)
   return monoid_algebra(Matrix{Int}(transpose(matrix(V_Q))), k)
+end
+
+@doc raw"""
+    monoid_algebra(Q::AffineSemigroup, k::Field)
+
+Return the monoid algebra over affine semigroup.
+"""
+function monoid_algebra(Q::AffineSemigroup, k::Field)
+  return monoid_algebra(Q.generators,k)
 end
 
 # compute the saturation of a monoid algebra
