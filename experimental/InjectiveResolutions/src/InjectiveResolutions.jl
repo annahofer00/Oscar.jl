@@ -347,8 +347,8 @@ function compute_shift(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
   n_bass = degrees_of_bass_numbers(M, i)
 
   #sum of all primitive integer vectors along rays of Q
-  c = zonotope(kQ)[2]
-  j = 0
+  c = zonotope(kQ)[2] #TODO: what should we choose if Q is not normal??
+  j = 1
   if is_normal(kQ)
     while !all([is_subset(convex_hull(b), cone(kQ)) for b in n_bass]) #loop until all degrees of bass numbers lie in Q
       bass_ = [a_bass + c for a_bass in n_bass]
@@ -356,7 +356,7 @@ function compute_shift(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
       j = j + 1
     end
   else
-    while !all([!is_in_semigroup(kQ,b) for b in n_bass]) #loop until all degrees of bass numbers lie in Q
+    while !all([is_in_semigroup(kQ,b) for b in n_bass]) #loop until all degrees of bass numbers lie in Q
       bass_ = [a_bass + c for a_bass in n_bass]
       n_bass = bass_
       j = j + 1
