@@ -583,6 +583,7 @@ monoid algebra over rational field with cone of dimension 2
 ```
 """
 function monoid_algebra(M_Q::Matrix{Int}, k::Field)
+  @assert all(M_Q .>= 0) "the given matrix must have non-negative entries"
   d = size(M_Q, 1)
 
   # construct k[t_1,...,t_d]
@@ -640,6 +641,7 @@ end
 Return the monoid algebra over affine semigroup.
 """
 function monoid_algebra(Q::AffineSemigroup, k::Field)
+  @assert is_pointed(Q) "the semigroup must be pointed"
   return monoid_algebra(Q.generators,k)
 end
 
