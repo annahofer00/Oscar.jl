@@ -342,12 +342,17 @@ such that all $\mathbb{Z}^d$-degrees of non-zero Bass numbers of $M(-a)$ lie in 
 """
 function compute_shift(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
   kQ = base_ring(M)
+  Q = kQ.affine_semigroup
 
   #get all degrees of non-zero Bass numbers up to cohomological degree i
   n_bass = degrees_of_bass_numbers(M, i)
 
   #sum of all primitive integer vectors along rays of Q
-  c = zonotope(kQ)[2] #TODO: what should we choose if Q is not normal??
+  if is_normal(kQ)
+    c = zonotope(kQ)[2]
+  else
+    c = sum(gens(Q)) #TODO: is the best way?
+  end
   j = 1
   if is_normal(kQ)
     while !all([is_subset(convex_hull(b), cone(kQ)) for b in n_bass]) #loop until all degrees of bass numbers lie in Q
