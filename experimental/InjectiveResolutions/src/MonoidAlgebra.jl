@@ -546,7 +546,7 @@ function get_hyperplane_H_presentation(h::Polyhedron)
   _M = Matrix{Rational}(aff_hull)
   M = hcat(map(row -> reshape(primitive_generator(Int, row), 1, :), eachrow(_M))...)
   A = [M[:, 2:n_columns(M)]; -M[:, 2:n_columns(M)]]
-  b = [M[:, 1]; -M[:1]]
+  b = [M[:, 1]; -M[:, 1]]
   return A, b
 end
 

@@ -592,7 +592,7 @@ function relevant_relations(N::SubquoModule{T},p::FaceQ, b::SubquoModuleElem{T},
   R = relations(N)
   rel_rels = Vector{FreeModElem{elem_type(kQ)}}()
   for r in R
-    if in_intersection(kQ,degree(Vector{Int},r),degree(Vector{Int},b),p) ## TODO: this is not correct
+    if in_intersection(kQ,degree(Vector{Int},r),degree(Vector{Int},b),p)
       # if any(i -> !is_zero(coordinates(r)[i]) && !is_zero(c_b[i]),1:ngens(N))
         push!(rel_rels,r)
       # end
@@ -881,7 +881,6 @@ true
 """
 function irreducible_decomposition(I::MonoidAlgebraIdeal)
   kQ = base_ring(I)
-  @req is_normal(kQ) "monoid algebra must be normal"
 
   J, _ = irreducible_hull(quotient_ring_as_module(I))
   if is_normal(kQ)
