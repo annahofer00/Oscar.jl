@@ -908,7 +908,7 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
   a = J.vector
 
   #get saturation of semigroup
-  kQsat = saturation(kQ) #TODO: this should only be computed once!
+  kQsat = saturation(kQ)
 
   #compute irreducible ideal in kQsat
   V = _get_irreducible_ideal(kQsat, J) #TODO: should minimal_generators be used here?

@@ -636,14 +636,11 @@ function monoid_algebra(Q::AffineSemigroup, k::Field)
 end
 
 # compute the saturation of a monoid algebra
-function saturation(kQ::MonoidAlgebra)
+@attr MonoidAlgebra function saturation(kQ::MonoidAlgebra)
   C = polyhedral_cone(kQ)
   k = coefficient_ring(kQ)
-  # compute hilbert basis
-  Csat = matrix(ZZ,hilbert_basis(C))
+  Csat = matrix(ZZ, hilbert_basis(C))
   Csat_int = Int.(Csat)
-
-  # the columns generate the saturation
   Csat_gens = [Csat_int[i,:] for i in 1:size(Csat_int,1)]
   return monoid_algebra(Csat_gens, k)
 end
