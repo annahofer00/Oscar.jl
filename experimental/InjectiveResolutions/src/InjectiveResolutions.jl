@@ -829,10 +829,7 @@ end
 @doc raw"""
     irreducible_decomposition(I::MonoidAlgebraIdeal)
 
-Return an irreducible decomposition of $I$. 
-
-!!! note
-    The monoid algebra $k[Q]$ must be normal. 
+Return an irreducible decomposition of $I$.
 
 # Examples
 ```jldoctest
@@ -1006,10 +1003,7 @@ end
 Return an irreducible resolution of $M$. If $i$ is specified then the resolution
 is only computed up to cohomological degree $i$.
 
-!!! note
-    The monoid algebra $k[Q]$ must be normal. 
-
-# Examples 
+# Examples
 ```jldoctest
 julia> kQ = monoid_algebra([[1,0],[0,1]],QQ)
 monoid algebra over rational field with cone of dimension 2
@@ -1051,7 +1045,6 @@ over monoid algebra over rational field with cone of dimension 2
 function irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{Int,Nothing}=nothing)
   kQ = base_ring(M)
   @assert generates_Zd(kQ) "The semigroup should generate ZZ^d."
-  # @req is_normal(kQ) "monoid algebra must be normal"
 
   R_Q = kQ.algebra
   Mi = M # current module in resolution
@@ -1122,9 +1115,6 @@ end
     injective_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
 
 Return an injective resolution of $M$ up to cohomological degree i.
-
-!!! note
-    The monoid algebra $k[Q]$ must be normal. 
 
 # Examples
 ```jldoctest
@@ -1243,7 +1233,6 @@ over monoid algebra over rational field with cone of dimension 2
 function injective_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
   kQ = base_ring(M)
   @assert generates_Zd(kQ) "The semigroup should generate ZZ^d."
-  # @req is_normal(kQ) "monoid algebra must be normal"
 
   G = grading_group(kQ)
 
@@ -1271,10 +1260,7 @@ end
 @doc raw"""
     injective_resolution(I::MonoidAlgebraIdeal,i::Int)
     
-Return an injective resolution of $M = k[Q]/I$ up to cohomological degree i.  
-
-!!! note
-    The monoid algebra $k[Q]$ must be normal. 
+Return an injective resolution of $M = k[Q]/I$ up to cohomological degree i.
 """
 function injective_resolution(I::MonoidAlgebraIdeal, i::Int)
   return injective_resolution(quotient_ring_as_module(I), i)
