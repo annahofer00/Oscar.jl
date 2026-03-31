@@ -123,7 +123,6 @@ export mod_quotient
 export monoid_algebra_ideal
 export FaceQ
 export prime_of_face
-export get_faces_of_polyhedral_cone
 export generators_W_H
 export ZF_basis
 export generates_Zd
@@ -1303,64 +1302,6 @@ function injective_resolution(I::MonoidAlgebraIdeal, i::Int)
   return injective_resolution(quotient_ring_as_module(I), i)
 end
 
-@doc raw"""
-    is_normal(A::MonoidAlgebra{<:FieldElem, <:MPolyQuoRing})
-
-Test if the given monoid algebra is normal by testing first the S2 and then the
-R1 condition.
-# Examples
-```jldoctest
-julia> A = monoid_algebra([[4,0],[3,1],[1,3],[0,4]],QQ)
-monoid algebra over rational field with cone of dimension 2
-
-julia> is_normal(A)
-false
-```
-"""
-@attr Bool function is_normal(A::MonoidAlgebra{<:FieldElem, <:MPolyQuoRing})
-  # Implementation adapted from 
-  #
-  #    M2/Macaulay2/packages/IntegralClosure.m2,
-  #
-  # line 666 ff. of https://github.com/Macaulay2/M2/blob/2565455411d15a3386204aa62a00e20ee5c0e99f/M2/Macaulay2/packages/IntegralClosure.m2 
-  # on Apr 25, 2025.
-  if isnothing(A.is_normal)
-    R = A.algebra::MPolyQuoRing
-    R_B = base_ring(R)
-    I = modulus(R)
-    M = quotient_ring_as_module(I)
-    n = codim(I)
-
-    # Check the S2 condition
-    test_range = 0:(krull_dim(R_B) - n - 2)
-
-    for j in test_range
-      # Check if codimension of Ext^{j+n+1} is at least j+n+3
-      # get ext:
-      E = ext(M,graded_free_module(R_B, 1),j + n + 1)
-      # work around issue https://github.com/oscar-system/Oscar.jl/issues/4884
-      if is_zero(E)
-        d = -1
-      else 
-        d = krull_dim(E)
-      end
-      cod = krull_dim(R_B) - d
-      if cod < j+n+3
-          return false
-      end               # S2 condition not satisfied
-    end
-
-    Jac = ideal(R, minors(map_entries(R, jacobian_matrix(gens(modulus(R)))), n))  # Compute minors of the Jacobian
-    d = krull_dim(Jac)                   # Get dimension of the Jacobian
-    d < 0 && return true            # Handle negative dimensions
-    A.is_normal = (krull_dim(R) - d >= 2)       # Check the condition
-  end
-  return A.is_normal
-end
-
-is_normal(A::MonoidAlgebra{<:FieldElem, <:MPolyRing}) = true
-
-
 # import local cohomology functions
 include("LocalCohomology.jl")
 include("ModuleFunctionality.jl")
@@ -1403,7 +1344,6 @@ export mod_quotient
 export monoid_algebra_ideal
 export FaceQ
 export prime_of_face
-export get_faces_of_polyhedral_cone
 export generators_W_H
 export ZF_basis
 export generates_Zd
