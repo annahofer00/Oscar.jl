@@ -222,7 +222,7 @@ For $1 \leq j \leq i$ compute sector partitions of the local cohomology modules 
 """
 function local_cohomology_all(I_M::MonoidAlgebraIdeal, I::MonoidAlgebraIdeal, i::Integer)
   @req I_M.algebra == I.algebra "ideals must be over same monoid algebra"
-  return local_cohomology_all(quotient_ring_as_module(M),I,i)
+  return local_cohomology_all(quotient_ring_as_module(I_M),I,i)
 end
 
 @doc raw"""
@@ -250,12 +250,12 @@ function local_cohomology_all(M::SubquoModule{T}, I::MonoidAlgebraIdeal, i::Inte
     Jj_1 = inj_res.inj_mods[j + 1]
     Jj_2 = inj_res.inj_mods[j + 2]
 
-    J, phi, psi, (j, k) = apply_gamma!(Jj, Jj_1, Jj_2, _phi, _psi, I)
-    Hj = sector_partition(kQ, phi, psi, j, k, J...)
-    push!(
-      H,
-      SectorPartitionLC(M, j, I.ideal, Hj, maps_needed(kQ, Hj)),
-    )
+    J, phi, psi, (j0, k0) = apply_gamma!(Jj, Jj_1, Jj_2, _phi, _psi, I)
+    Hj = sector_partition(kQ, phi, psi, j0, k0, J...)
+    lc = SectorPartitionLC(M, j, I)
+    lc.sectors = Hj
+    lc.maps = maps_needed(kQ, Hj)
+    push!(H, lc)
   end
   return H
 end

@@ -755,7 +755,7 @@ end
 rand(A::MonoidAlgebra, v...) = A(rand(A.algebra, v...))
 
 ### Additional functionality for ring conformance tests
-Base.hash(a::MonoidAlgebraElem, h::UInt) = hash(underlying_element, h)
+Base.hash(a::MonoidAlgebraElem, h::UInt) = hash(underlying_element(a), h)
 characteristic(A::MonoidAlgebra) = characteristic(A.algebra)
 divexact(a::MonoidAlgebraElem, b::MonoidAlgebraElem; check::Bool=true) = parent(a)(divexact(underlying_element(a), underlying_element(b); check))
 
