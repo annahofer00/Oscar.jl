@@ -704,11 +704,10 @@ function radical(I::MonoidAlgebraIdeal)
   return MonoidAlgebraIdeal(base_ring(I), radical(underlying_ideal(I)))
 end
 
-#TODO: implement this function
-# function minimal_generating_set(I::MonoidAlgebraIdeal)
-#   _I = underlying_ideal(I)
-#   return minimal_generators(_I)
-# end
+function minimal_generating_set(I::MonoidAlgebraIdeal)
+  kQ = base_ring(I)
+  return [kQ(g) for g in minimal_generating_set(underlying_ideal(I))]
+end
 
 dim(I::MonoidAlgebraIdeal) = krull_dim(underlying_ideal(I))
 krull_dim(I::MonoidAlgebraIdeal) = krull_dim(underlying_ideal(I))
