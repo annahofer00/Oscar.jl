@@ -498,31 +498,6 @@ function get_polyhedral_cone(R::Union{MPolyDecRing,MPolyQuoRing})
   return positive_hull(D)
 end
 
-# (works more general for polyhedra)
-# given a polyhedral cone, this function returns its faces
-# INPUT:    polyhedral cone C
-# OUTPUT:   set of faces of C
-function get_faces_of_polyhedral_cone(
-  kQ::Union{MPolyRing,MPolyQuoRing}, P::Polyhedron
-)
-  P_faces = Vector{Polyhedron}()
-  for i in 0:dim(P)
-    append!(P_faces, Oscar.faces(P, i))
-  end
-  #get semigroup generators of faces
-  _faces = Vector{FaceQ}()
-  D = [degree(Vector{Int},g) for g in gens(kQ)]
-  for F in P_faces
-    A = [D[i] for i in 1:length(D) if is_subset(convex_hull(D[i]), F)]
-    if is_empty(A)
-      push!(_faces, FaceQ(prime_of_face(kQ, F), F, nothing))
-    else
-      push!(_faces, FaceQ(prime_of_face(kQ, F), F, hcat(A...)))
-    end
-  end
-  return _faces 
-end
-
 
 function get_bounding_hyperplanes(P::Polyhedron)
   hyperplanes = Vector{HyperplaneQ}()
