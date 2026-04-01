@@ -116,6 +116,7 @@ export cone
 export saturation_ideal
 export saturation_map
 export holes_module
+export is_Q_graded
 
 export compute_shift
 export InjMod
@@ -172,14 +173,17 @@ end
 
 function compute_Q_graded_part(I::InjMod)
   kQ = I.monoid_algebra
+  if isempty(I.indec_injectives)
+    F = graded_free_module(kQ, 0)
+    return quo(F, [zero(F)])[1]
+  end
   if is_normal(kQ)
     irreducible_ideals = [_get_irreducible_ideal(kQ, J) for J in I.indec_injectives]
   else
     irreducible_ideals = [_get_irreducible_ideal_unsaturated(kQ, J) for J in I.indec_injectives]
   end
-  # irreducible_ideals = [_get_irreducible_ideal(kQ, J) for J in I.indec_injectives]
   irreducible_comp = [quotient_ring_as_module(Ji) for Ji in irreducible_ideals]
-  return direct_sum(irreducible_comp...,task=:none)
+  return direct_sum(irreducible_comp..., task=:none)
 end
 struct IrrRes # irreducible resolution (including all computed data and the cochain complex)
   mod::SubquoModule
@@ -565,9 +569,13 @@ function coefficients_wrt_generators(m::SubquoModuleElem{T}, N::SubquoModule{T})
   m_amb = ambient_representative(m) ## why is this needed??
   coord_sparse = coordinates(N(m_amb))
   _coord = [evaluate(coord_sparse[i], [1 for _ in 1:ngens(kQ)]) for i in 1:ngens(N)]
+  d = degree(Vector{Int}, m)
   for i in 1:length(_coord)
-    if !is_zero(_coord[i]) && is_zero(monomial_basis(kQ,degree(Vector{Int},m))[1]*N[i])
-      _coord[i] = k()
+    if !is_zero(_coord[i])
+      d_diff = d - degree(Vector{Int}, N[i])
+      if !is_in_semigroup(kQ, d_diff) || is_zero(monomial_basis(kQ, d_diff)[1]*N[i])
+        _coord[i] = k()
+      end
     end
   end
   return _coord
@@ -734,11 +742,26 @@ function _coefficients_non_normal(N::SubquoModule{T}, p::FaceQ, Bp) where {T <: 
 
     R_bF = Vector{FreeModElem{elem_type(kQ)}}()
     C_bF = Vector{Vector{elem_type(k)}}()
-    x_rel_gens = [monomial_basis(kQ, degree(g))[1] for g in rel_gens]
+    # use saturation for monomial_basis since degrees may not be in Q
+    kQsat = saturation(kQ)
+    phi = saturation_map(kQ)
+    x_rel_gens = [monomial_basis(kQsat, degree(g))[1] for g in rel_gens]
     for r in rel_rels
-      x_r = monomial_basis(kQ, degree(r))[1]
+      x_r = monomial_basis(kQsat, degree(r))[1]
       a = lcm(x_rel_gens..., x_r)
-      _r = (a//x_r).num*r
+
+      # compute scaling factor (a//x_r) and pull back to kQ
+      scaling = divexact(a, x_r)
+      # scale r: need to work in kQ, so express scaling as element of kQ if possible
+      d_scaling = degree(Vector{Int}, scaling)
+      if !is_in_semigroup(kQ, d_scaling) && !is_zero(d_scaling)
+        continue
+      end
+      if is_zero(d_scaling)
+        _r = r
+      else
+        _r = monomial_basis(kQ, d_scaling)[1] * r
+      end
 
       if _r in _N
         _c_r = Oscar.coordinates(_N(_r))
@@ -1045,7 +1068,11 @@ function irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{I
   kQ = base_ring(M)
   @assert generates_Zd(kQ) "The semigroup should generate ZZ^d."
 
-  R_Q = kQ.algebra
+  # if !is_normal(kQ)
+  #   R_Q = saturation(kQ).algebra
+  # else
+    R_Q = kQ.algebra
+  # end
   Mi = M # current module in resolution
 
   #initialize
@@ -1064,9 +1091,10 @@ function irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{I
     #multiply rows of lambda by degrees of generators of Mi
     m, n = size(_lambda)
     lambda = zero(_lambda)
-    for i in 1:m
-      for j in 1:n
-        lambda[i, j] = monomial_basis(R_Q, degree(Mi[i]))[1] * _lambda[i, j]
+    for ii in 1:m
+      for jj in 1:n
+        lambda[ii, jj] = monomial_basis(R_Q, degree(Mi[ii]))[1] * _lambda[ii, jj]
+        # lambda[ii, jj] = one(R_Q) * _lambda[ii, jj]
       end
     end
 
@@ -1300,6 +1328,7 @@ export cone
 export saturation_ideal
 export saturation_map
 export holes_module
+export is_Q_graded
 
 export compute_shift
 export InjMod

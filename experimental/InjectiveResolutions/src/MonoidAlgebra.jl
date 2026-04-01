@@ -695,13 +695,23 @@ function holes_module(kQ::MonoidAlgebra)
   kQsat = saturation(kQ)
   G = grading_group(kQ)
   degrees = [G(degree(Vector{Int}, kQsat(g))) for g in gs[1:s-1]]
-  F = graded_free_module(kQ, [-d for d in degrees])
+  F = graded_free_module(kQ, degrees)
 
   # relations: first s-1 columns of PM (since e_s = 0)
   rels = [sum(kQ(PM[i,j]) * F[j] for j in 1:s-1) for i in 1:r]
   filter!(!is_zero, rels)
 
   return quo(F, rels)[1]
+end
+
+@doc raw"""
+    is_Q_graded(M::SubquoModule{<:MonoidAlgebraElem})
+
+Check if all generators of $M$ have degrees in the semigroup $Q$.
+"""
+function is_Q_graded(M::SubquoModule{<:MonoidAlgebraElem})
+  kQ = base_ring(M)
+  return all(g -> is_zero(g) || is_in_semigroup(kQ, degree(Vector{Int}, g)), gens(M))
 end
 
 function Base.show(io::IO,F::FaceQ)
