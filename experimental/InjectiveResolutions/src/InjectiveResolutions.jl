@@ -113,6 +113,9 @@ export ambient_dimension
 export semigroup_generators
 export polyhedral_cone
 export cone
+export saturation_ideal
+export saturation_map
+export holes_module
 
 export compute_shift
 export InjMod
@@ -908,14 +911,10 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
   kQsat = saturation(kQ)
 
   #compute irreducible ideal in kQsat
-  V = _get_irreducible_ideal(kQsat, J) #TODO: should minimal_generators be used here?
-
-  # define map from kQ to kQsat
-  im_phi = [monomial_basis(kQsat, degree(g))[1] for g in gens(kQ.algebra)]
-  phi = Oscar.hom(kQ,kQsat,im_phi)
+  V = _get_irreducible_ideal(kQsat, J)
 
   # kQ as a kQsat-module
-  I_kQ = ideal(kQsat, [phi(underlying_element(g)) for g in gens(kQ)])
+  I_kQ = saturation_ideal(kQ)
 
   W = intersect(I_kQ,V) #this is an ideal in kQsat
 
@@ -1298,6 +1297,9 @@ export ambient_dimension
 export semigroup_generators
 export polyhedral_cone
 export cone
+export saturation_ideal
+export saturation_map
+export holes_module
 
 export compute_shift
 export InjMod
