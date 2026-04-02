@@ -767,7 +767,7 @@ function _coefficients_non_normal(N::SubquoModule{T}, p::FaceQ, Bp) where {T <: 
         _c_r = Oscar.coordinates(_N(_r))
         c_r = Vector{elem_type(k)}()
         for i in 1:ngens(N)
-          j = findfirst(g -> ambient_representative(g) == ambient_representative(N[i]), rel_gens)
+          j = findfirst(g -> ambient_representative(g) == ambient_representative(N[i]), gens(N))
           if j == i
             push!(c_r, evaluate(_c_r[i], [1 for _ in 1:ngens(kQ)]))
           else
@@ -1067,6 +1067,7 @@ over monoid algebra over rational field with cone of dimension 2
 function irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{Int,Nothing}=nothing)
   kQ = base_ring(M)
   @assert generates_Zd(kQ) "The semigroup should generate ZZ^d."
+  @assert is_Q_graded(M) "M should be Q-graded."
 
   # if !is_normal(kQ)
   #   R_Q = saturation(kQ).algebra
