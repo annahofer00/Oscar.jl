@@ -675,12 +675,11 @@ function _coefficients_normal(N::SubquoModule{T}, p::FaceQ, Bp) where {T <: Mono
         _r = (a//x_r).num*r
 
         if _r in _N
-          _c_r = coordinates(_N(_r))
+          _c_r = coordinates(_r)
           c_r = Vector{elem_type(k)}()
           for i in 1:ngens(N)
-            j = findfirst(g -> g == N[i], G_b)
-            if j !== nothing
-              push!(c_r, evaluate(_c_r[j], [1 for _ in 1:ngens(kQ)]))
+            if N[i] in G_b
+              push!(c_r, evaluate(_c_r[i], [1 for _ in 1:ngens(kQ)]))
             else
               push!(c_r, k())
             end
@@ -764,7 +763,7 @@ function _coefficients_non_normal(N::SubquoModule{T}, p::FaceQ, Bp) where {T <: 
       end
 
       if _r in _N
-        _c_r = Oscar.coordinates(_N(_r))
+        _c_r = Oscar.coordinates(_r)
         c_r = Vector{elem_type(k)}()
         for i in 1:ngens(N)
           j = findfirst(g -> ambient_representative(g) == ambient_representative(N[i]), gens(N))
@@ -980,7 +979,7 @@ function _get_irreducible_ideal_unsaturated(kQ::MonoidAlgebra, J::IndecInj)
     end
     i = 0
     for g in filter(!is_zero,gens(W_F))
-      #check if g = a + ZF 
+      #check if deg(g) in a + ZF
       d_vec = degree(Vector{Int},g)
       if is_in_aZF(a,J.face,d_vec)
         continue
