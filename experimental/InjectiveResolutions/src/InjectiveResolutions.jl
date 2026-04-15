@@ -122,6 +122,7 @@ export compute_shift
 export InjMod
 export IndecInj
 export irreducible_hull
+export injective_hull
 export Q_graded_part
 export mod_quotient
 export monoid_algebra_ideal
@@ -1293,6 +1294,36 @@ function injective_resolution(I::MonoidAlgebraIdeal, i::Int)
   return injective_resolution(quotient_ring_as_module(I), i)
 end
 
+function injective_hull(M::SubquoModule{<:MonoidAlgebraElem})
+  kQ = base_ring(M)
+  @assert generates_Zd(kQ) "The semigroup should generate ZZ^d."
+  @assert is_Q_graded(M) "M should be Q-graded."
+
+  R_Q = kQ.algebra
+  G = grading_group(kQ)
+
+  #compute irreducible hull of shifted module
+  a_shift = compute_shift(M, 0)
+  M_a = twist(M, -G(a_shift))
+  J, _lambda = irreducible_hull(M_a, 0)
+
+  #multiply rows of lambda by degrees of generators of M
+  m, n = size(_lambda)
+  lambda = zero(_lambda)
+  for ii in 1:m
+    for jj in 1:n
+      lambda[ii, jj] = monomial_basis(R_Q, degree(M[ii]))[1] * _lambda[ii, jj]
+    end
+  end
+
+  # undo shift to obtain injective hull of M
+  E = InjMod(kQ,map(
+    indec -> IndecInj(indec.face, indec.vector - a_shift), J.indec_injectives
+  ))
+
+  return E,lambda
+end
+
 # import local cohomology functions
 include("LocalCohomology.jl")
 include("ModuleFunctionality.jl")
@@ -1334,6 +1365,7 @@ export compute_shift
 export InjMod
 export IndecInj
 export irreducible_hull
+export injective_hull
 export Q_graded_part
 export mod_quotient
 export monoid_algebra_ideal
