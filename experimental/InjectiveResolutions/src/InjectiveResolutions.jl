@@ -99,6 +99,7 @@ export irreducible_resolution
 export irreducible_decomposition
 
 export injective_resolution
+export old_injective_resolution
 
 export local_cohomology
 export local_cohomology_all
@@ -119,6 +120,8 @@ export holes_module
 export is_Q_graded
 
 export compute_shift
+export old_compute_shift
+export compute_shift_bound
 export InjMod
 export IndecInj
 export irreducible_hull
@@ -132,6 +135,8 @@ export generators_W_H
 export ZF_basis
 export generates_Zd
 export degrees_of_bass_numbers
+export old_degrees_of_bass_numbers
+export degrees_of_bass_numbers_bound
 export in_intersection
 export in_semigroup
 export is_in_aZF
@@ -330,6 +335,29 @@ function degrees_of_bass_numbers(M::SubquoModule{<:MonoidAlgebraElem}, i::Int) #
   I_m = ideal(R_Q, gens(R_Q))
   k = quotient_ring_as_module(I_m)
 
+  # `ext(k, M, j)` rebuilds the free resolution of k from scratch on every
+  # call. We instead build that resolution once (deep enough for Ext^i) and
+  # apply Hom(-, M) once, then read off each Ext^j(k, M) as a homology lookup.
+  free_res = free_resolution(k; length=i+2)
+  lifted   = hom(free_res.C[first(Hecke.map_range(free_res.C)):-1:1], M)
+
+  degrees = Vector{Vector{Int}}()
+  for j in 0:i
+    E = simplify_light(homology(lifted, j))[1]
+    for g in filter(!is_zero, gens(E))
+      push!(degrees, degree(Vector{Int}, g))
+    end
+  end
+  return unique(degrees) # filter duplicates
+end
+
+function old_degrees_of_bass_numbers(M::SubquoModule{<:MonoidAlgebraElem}, i::Int) # now also for fin. gen. modules
+  R_Q = base_ring(M)
+
+  # residue field
+  I_m = ideal(R_Q, gens(R_Q))
+  k = quotient_ring_as_module(I_m)
+
   degrees = Vector{Vector{Int}}()
   for j in 0:i
     E = ext(k, M, j)
@@ -341,12 +369,108 @@ function degrees_of_bass_numbers(M::SubquoModule{<:MonoidAlgebraElem}, i::Int) #
 end
 
 @doc raw"""
+    degrees_of_bass_numbers_bound(M::SubquoModule, i::Int)
+
+Return a finite set `D` of $\mathbb{Z}^d$-degrees such that every degree of a
+non-zero Bass number of `M` up to cohomological degree `i` lies in `D + Q`:
+
+$$D = \{\deg(g) - \deg(e) : g \in \mathrm{gens}(M),\ e \in \mathrm{gens}(F_j),\ 0 \le j \le i+1\},$$
+
+where $F_\bullet$ is a graded free resolution of the residue field $k = R_Q/m$.
+
+Since $\mathrm{Ext}^j(k,M)$ is a subquotient of $\mathrm{Hom}(F_j, M) = \bigoplus_e M(\deg e)$
+and $\mathrm{supp}(M) \subseteq \bigcup_g (\deg(g) + Q)$, the degrees of the Bass
+numbers are contained in `D + Q`. This is a cheap over-approximation of
+[`degrees_of_bass_numbers`](@ref): it reads degrees off the resolution and avoids
+applying $\mathrm{Hom}(-, M)$ and computing homology, at the cost of a possibly
+larger set. Because $Q$ is a semigroup, any shift `a` with `D + a ⊆ Q` also
+satisfies `(bass degrees) + a ⊆ Q`, so `D` may replace the exact Bass degrees
+in [`compute_shift`](@ref); see [`compute_shift_bound`](@ref).
+"""
+function degrees_of_bass_numbers_bound(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
+  R_Q = base_ring(M)
+
+  # residue field k = R_Q/m and its graded free resolution
+  k = quotient_ring_as_module(ideal(R_Q, gens(R_Q)))
+  free_res = free_resolution(k; length=i+2)
+
+  # generator degrees of M
+  deg_M = [degree(Vector{Int}, g) for g in filter(!is_zero, gens(M))]
+
+  # generator degrees of F_0, ..., F_{i+1}
+  deg_F = Vector{Vector{Int}}()
+  for j in 0:(i + 1)
+    Fj = free_res[j]
+    for d in degrees_of_generators(Fj)
+      push!(deg_F, Int[d[l] for l in 1:ngens(parent(d))])
+    end
+  end
+
+  # D = { deg(g) - deg(e) }
+  D = Set{Vector{Int}}()
+  for dg in deg_M, de in deg_F
+    push!(D, dg .- de)
+  end
+  return collect(D)
+end
+
+@doc raw"""
     compute_shift(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
 
 Let $M$ be finitely generated $\mathbb{Z}^d$-graded module over a monoid algebra $k[Q]$. This function computes $a\in \mathbb{Z}^d$
 such that all $\mathbb{Z}^d$-degrees of non-zero Bass numbers of $M(-a)$ lie in $Q$. 
 """
+# Given a finite set of ℤ^d-degrees, return a shift a = j*c (j ≥ 0, c the sum of
+# primitive ray generators of Q) such that every degree + a lies in Q. For each
+# degree b the smallest j_b with b + j_b*c ∈ Q is found independently, and the
+# shift is max(j_b)*c. Each degree is translated only until it lands in Q, rather
+# than re-testing the whole list on every iteration as in `old_compute_shift`.
+function _shift_into_Q(kQ::MonoidAlgebra, degrees::Vector{Vector{Int}})
+  Q = affine_semigroup(kQ)
+  if is_normal(kQ)
+    c = zonotope(kQ)[2]
+    C = cone(kQ)
+    in_Q = b -> is_subset(convex_hull(b), C) # for normal Q: Q = cone ∩ lattice
+  else
+    c = sum(gens(Q)) #TODO: is the best way?
+    in_Q = b -> is_in_semigroup(kQ, b)
+  end
+
+  j = 0
+  for b in degrees
+    j_b = 0
+    v = b
+    while !in_Q(v)
+      v = v + c
+      j_b += 1
+    end
+    j = max(j, j_b)
+  end
+  return j*c
+end
+
 function compute_shift(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
+  #get all degrees of non-zero Bass numbers up to cohomological degree i
+  return _shift_into_Q(base_ring(M), degrees_of_bass_numbers(M, i))
+end
+
+@doc raw"""
+    compute_shift_bound(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
+
+Like [`compute_shift`](@ref), but uses the cheap over-approximation
+[`degrees_of_bass_numbers_bound`](@ref) instead of the exact Bass-number degrees.
+The returned shift is valid (all Bass degrees of `M(-a)` lie in `Q`) but may be
+larger than the one from `compute_shift`.
+"""
+function compute_shift_bound(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
+  return _shift_into_Q(base_ring(M), degrees_of_bass_numbers_bound(M, i))
+end
+
+# Reference implementation kept for correctness/performance comparison against
+# `compute_shift`. Note this version starts the counter at j=1 and re-tests the
+# entire Bass-degree list on every iteration, so it can over-shoot the minimal
+# shift by one `c`.
+function old_compute_shift(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
   kQ = base_ring(M)
   Q = kQ.affine_semigroup
 
@@ -646,20 +770,24 @@ function _coefficients_normal(N::SubquoModule{T}, p::FaceQ, Bp) where {T <: Mono
   k = coefficient_ring(kQ)
   R = relations(N)
 
+  gen_data = [(g, convex_hull(degree(Vector{Int}, g)) + cone(kQ)) for g in filter(!is_zero, gens(N))]
+  rel_data = [(r, convex_hull(degree(Vector{Int}, r)) + cone(kQ)) for r in R]
+
   lambda = Vector{Vector{elem_type(k)}}()
   for b in Bp
+    b_p = convex_hull(degree(Vector{Int}, b))
+    b_ZF = b_p + p.poly + (-1)*p.poly # b + ZF
     #get coefficient vector w.r.t. generators of N
     b_amb = ambient_representative(b)
     _c_b = coordinates(N(b_amb))
+    @assert all(is_zero(_c_b[i]) || is_homogeneous(_c_b[i]) for i in 1:ngens(N)) "non-homogeneous coordinate — all-ones evaluation is wrong here"
     c_b = [evaluate(_c_b[i], [1 for _ in 1:ngens(kQ)]) for i in 1:ngens(N)]
 
     #get all relevant generators of N, i.e., check (deg(b) + ZF) \cap (deg(g) + Q) ≠ ∅
-    b_p = convex_hull(degree(Vector{Int}, b))
     G_b = Vector{SubquoModuleElem}()
-    for g_N in filter(!is_zero, gens(N))
-      g_p = convex_hull(degree(Vector{Int}, g_N))
-      if dim(intersect(b_p + p.poly + (-1)*p.poly, g_p + cone(kQ))) >= 0
-        push!(G_b, g_N)
+    for (g,g_poly) in gen_data
+      if dim(intersect(b_ZF, g_poly)) >= 0
+        push!(G_b, g)
       end
     end
     x_Gb = [monomial_basis(kQ, degree(g))[1] for g in G_b]
@@ -668,9 +796,8 @@ function _coefficients_normal(N::SubquoModule{T}, p::FaceQ, Bp) where {T <: Mono
     #get all b-relevant relations w.r.t. F
     R_bF = Vector{FreeModElem{elem_type(kQ)}}()
     C_bF = Vector{Vector{elem_type(k)}}()
-    for r in R
-      r_p = convex_hull(degree(Vector{Int}, r))
-      if dim(intersect(b_p + p.poly + (-1)*p.poly, r_p + cone(kQ))) >= 0
+    for (r,r_poly) in rel_data
+      if dim(intersect(b_ZF, r_poly)) >= 0
         x_r = monomial_basis(kQ, degree(r))[1]
         a = lcm(x_Gb..., x_r)
         _r = (a//x_r).num*r
@@ -822,6 +949,7 @@ Return an irreducible hull of $M$.
 function irreducible_hull(Mi::SubquoModule{<:MonoidAlgebraElem}, j=0)
   kQ = base_ring(Mi)
   T = elem_type(kQ)
+  zero_Mi = (ideal(kQ, []) * Mi)[1]
 
   #initialize
   N = Mi
@@ -840,7 +968,7 @@ function irreducible_hull(Mi::SubquoModule{<:MonoidAlgebraElem}, j=0)
       push!(lambda, lambda_p)
     end
 
-    M_sat = saturation((ideal(kQ, []) * Mi)[1], monoid_algebra_ideal(kQ,p.prime))
+    M_sat = saturation(zero_Mi, monoid_algebra_ideal(kQ,p.prime))
     if !is_zero(p.prime) && !is_zero(M_sat)
       N, _ = quo(Mi, M_sat)
     end
@@ -1093,8 +1221,9 @@ function irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{I
     m, n = size(_lambda)
     lambda = zero(_lambda)
     for ii in 1:m
+      x_ii = monomial_basis(R_Q, degree(Mi[ii]))[1]
       for jj in 1:n
-        lambda[ii, jj] = monomial_basis(R_Q, degree(Mi[ii]))[1] * _lambda[ii, jj]
+        lambda[ii, jj] = x_ii * _lambda[ii, jj]
         # lambda[ii, jj] = one(R_Q) * _lambda[ii, jj]
       end
     end
@@ -1265,6 +1394,37 @@ function injective_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
   G = grading_group(kQ)
 
   #compute irreducible resolution of shifted module
+  a_shift = compute_shift_bound(M, i+1)
+  M_a = twist(M, -G(a_shift))
+  irr_res = irreducible_resolution(M_a,i)
+
+  #get injective modules up to cohomological degree i, i.e. J^0, J^1, ...,J^i
+  inj_modules = Vector{InjMod}()
+  for j in 1:min(i + 1, length(irr_res.irr_sums))
+    shifted_comp = map(
+      indec -> IndecInj(indec.face, indec.vector - a_shift), irr_res.irr_sums[j].indec_injectives
+    )
+    push!(inj_modules, InjMod(kQ, shifted_comp))
+  end
+
+  #get all needed maps (as k-matrix or k[Q]-matrix?)
+  cochain_maps = [
+    matrix(irr_res.cochain_maps[k]) for k in eachindex(irr_res.cochain_maps) if 1 <= k <= i+1
+  ]
+  return InjRes(M, inj_modules, cochain_maps, length(inj_modules)-1, irr_res, a_shift)
+end
+
+# Reference implementation kept for comparison against `injective_resolution`.
+# Identical except it uses the exact `compute_shift` (which applies Hom(-, M) and
+# computes homology of the residue-field resolution) instead of the cheaper
+# over-approximation `compute_shift_bound`.
+function old_injective_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
+  kQ = base_ring(M)
+  @assert generates_Zd(kQ) "The semigroup should generate ZZ^d."
+
+  G = grading_group(kQ)
+
+  #compute irreducible resolution of shifted module
   a_shift = compute_shift(M, i+1)
   M_a = twist(M, -G(a_shift))
   irr_res = irreducible_resolution(M_a,i)
@@ -1283,6 +1443,15 @@ function injective_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Int)
     matrix(irr_res.cochain_maps[k]) for k in eachindex(irr_res.cochain_maps) if 1 <= k <= i+1
   ]
   return InjRes(M, inj_modules, cochain_maps, length(inj_modules)-1, irr_res, a_shift)
+end
+
+@doc raw"""
+    old_injective_resolution(I::MonoidAlgebraIdeal, i::Int)
+
+Like [`injective_resolution`](@ref) but using the exact `compute_shift`; kept for comparison.
+"""
+function old_injective_resolution(I::MonoidAlgebraIdeal, i::Int)
+  return old_injective_resolution(quotient_ring_as_module(I), i)
 end
 
 @doc raw"""
@@ -1342,6 +1511,7 @@ export irreducible_resolution
 export irreducible_decomposition
 
 export injective_resolution
+export old_injective_resolution
 
 export local_cohomology
 export local_cohomology_all
@@ -1362,6 +1532,8 @@ export holes_module
 export is_Q_graded
 
 export compute_shift
+export old_compute_shift
+export compute_shift_bound
 export InjMod
 export IndecInj
 export irreducible_hull
@@ -1375,6 +1547,8 @@ export generators_W_H
 export ZF_basis
 export generates_Zd
 export degrees_of_bass_numbers
+export old_degrees_of_bass_numbers
+export degrees_of_bass_numbers_bound
 export in_intersection
 export in_semigroup
 export is_in_aZF
