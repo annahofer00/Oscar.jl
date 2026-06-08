@@ -335,8 +335,8 @@ function degrees_of_bass_numbers(M::SubquoModule{<:MonoidAlgebraElem}, i::Int) #
   k = quotient_ring_as_module(I_m)
 
   # `ext(k, M, j)` rebuilds the free resolution of k from scratch on every
-  # call. We instead build that resolution once (deep enough for Ext^i) and
-  # apply Hom(-, M) once, then read off each Ext^j(k, M) as a homology lookup.
+  # call. We instead build that resolution once and
+  # apply Hom(-, M) once, then read off each Ext^j(k, M).
   free_res = free_resolution(k; length=i+2)
   lifted   = hom(free_res.C[first(Hecke.map_range(free_res.C)):-1:1], M)
 
@@ -1217,9 +1217,9 @@ end
 Return an injective resolution of $M$ up to cohomological degree i.
 
 The keyword `shift` selects how the initial shift is computed:
-* `:bound` (default) uses [`compute_shift_bound`](@ref) — cheaper.
-* `:helm_miller` uses [`compute_shift`](@ref) — the shift described in
-  Helm-Miller.
+* `:bound` (default) uses [`compute_shift_bound`](@ref).
+* `:helm_miller` uses [`compute_shift`](@ref) (the shift described in
+  Helm-Miller)
 
 # Examples
 ```jldoctest
@@ -1371,8 +1371,7 @@ end
 
 # Generic rank of a SubquoModule M, i.e. dim_{Frac R} (M ⊗ Frac R). For f.g. M
 # over a domain (which `k[Q]` is), M is torsion iff `annihilator(M) ≠ 0`, in
-# which case the rank is 0 — that covers every module of the form k[Q]/I with
-# I ≠ 0 and submodules of sums of such. For non-torsion M we fall back to
+# which case the rank is 0. For non-torsion M we fall back to
 # `rank` of the presentation matrix; that may hit "not implemented" over
 # `MPolyQuoRing`-backed monoid algebras, in which case it errors.
 function _generic_rank(M::SubquoModule)
@@ -1417,12 +1416,6 @@ of the indecomposable injective $E(F, a) = k\{a + F - Q\}$ in the `j`-th term of
 the minimal injective resolution of `M`. Degrees are reduced modulo $\mathbb{Z}F$
 because $E(F, a) \cong E(F, a+v)$ as graded $k[Q]$-modules for $v \in \mathbb{Z}F$
 (via the $k[\mathbb{Z}F]$-action on $E_F = k\{F - Q\}$).
-
-Computed independently of any constructed resolution, using
-$\mu^j(p_F, M)_a = \dim_{k(p_F)} \mathrm{Ext}^j(k[Q]/p_F, M)_{p_F}$. Since that
-localized Ext is annihilated by $p_F$, it equals the $k[\mathbb{Z}F]$-rank (by
-degree) of $(0 :_{E^j} p_F)[\mathbb{Z}F]$, which is read off from
-[`ZF_basis`](@ref) applied to $E^j = \mathrm{Ext}^j(k[Q]/p_F, M)$.
 """
 function graded_bass_numbers(M::SubquoModule{<:MonoidAlgebraElem}, p::FaceQ, i::Int)
   kQ = base_ring(M)
