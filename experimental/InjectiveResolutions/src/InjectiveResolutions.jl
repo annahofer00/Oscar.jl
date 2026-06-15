@@ -711,13 +711,66 @@ function coefficients(N::SubquoModule{T}, p::FaceQ) where {T <: MonoidAlgebraEle
   end
 end
 
+# Given, for a face p and a list of socle basis elements (their degrees `degs`,
+# coefficient vectors `c_bs` w.r.t. the n generators of N, and per-element
+# relation-coefficient matrices `C_rows`), compute the coefficient vectors
+# lambda defining the embedding into the irreducible hull.
+#
+# Injectivity of the hull is a graded condition: the indecomposable injective
+# k{deg(b)+F-Q} depends on deg(b) only modulo ZF, and the socle (0:_N p_F)
+# decomposes over Z^d/ZF. So we work one ZF-class at a time. Within a class with
+# socle elements b_1,...,b_s, all share the kernel K = ker(C) (relevant relations
+# depend only on the class), and the c_{b_j}|_K are linearly independent. We pick
+# lambda_1,...,lambda_s in K *dual* to the c_{b_j}, i.e. <lambda_i, c_{b_j}> =
+# delta_{ij}, by solving one linear system. This makes the socle matrix the
+# identity, hence the map injective. (Choosing each lambda_i only so that
+# <lambda_i, c_{b_i}> != 0 -- one element at a time -- is NOT enough: the socle
+# matrix can be singular even with linearly independent rows.)
+function _dual_basis_lambdas(k, n::Int, p::FaceQ, degs, c_bs, C_rows)
+  S = elem_type(k)
+  lambda = Vector{Vector{S}}(undef, length(degs))
+
+  # group socle elements by ZF-class of their degree
+  groups = Vector{Tuple{Vector{Int}, Vector{Int}}}() # (representative degree, indices)
+  for (idx, d_b) in enumerate(degs)
+    gidx = findfirst(t -> is_in_aZF(t[1], p, d_b), groups)
+    if gidx === nothing
+      push!(groups, (d_b, Int[idx]))
+    else
+      push!(groups[gidx][2], idx)
+    end
+  end
+
+  for (_, idxs) in groups
+    s = length(idxs)
+    # common kernel K = ker(C) for the class (rows from all its elements)
+    rows = Vector{Vector{S}}()
+    for i in idxs
+      append!(rows, C_rows[i])
+    end
+    Kmat = isempty(rows) ? identity_matrix(k, n) : kernel(matrix(k, hcat(rows...)))
+    m = nrows(Kmat)
+    # P[j,t] = <c_{b_j}, kappa_t>, where kappa_t is the t-th row of Kmat
+    P = matrix(k, s, m, S[sum(c_bs[idxs[j]][g] * Kmat[t, g] for g in 1:n) for j in 1:s for t in 1:m])
+    # X (m x s) with P*X = I_s; rows of K^T*X = lambda are dual to the c_{b_j}
+    X = Oscar.solve(P, identity_matrix(k, s); side = :right)
+    Lambda = transpose(X) * Kmat # s x n
+    for (jj, i) in enumerate(idxs)
+      lambda[i] = S[Lambda[jj, g] for g in 1:n]
+    end
+  end
+  return lambda
+end
+
 # Normal case: uses polyhedral intersection for relevance checks
 function _coefficients_normal(N::SubquoModule{T}, p::FaceQ, Bp) where {T <: MonoidAlgebraElem}
   kQ = base_ring(N)
   k = coefficient_ring(kQ)
   R = relations(N)
 
-  lambda = Vector{Vector{elem_type(k)}}()
+  degs = Vector{Vector{Int}}()
+  c_bs = Vector{Vector{elem_type(k)}}()
+  C_rows = Vector{Vector{Vector{elem_type(k)}}}()
   for b in Bp
     #get coefficient vector w.r.t. generators of N
     b_amb = ambient_representative(b)
@@ -737,7 +790,6 @@ function _coefficients_normal(N::SubquoModule{T}, p::FaceQ, Bp) where {T <: Mono
     _N = sub(ambient_free_module(N), [ambient_representative(g) for g in G_b])[1]
 
     #get all b-relevant relations w.r.t. F
-    R_bF = Vector{FreeModElem{elem_type(kQ)}}()
     C_bF = Vector{Vector{elem_type(k)}}()
     for r in R
       r_p = convex_hull(degree(Vector{Int}, r))
@@ -758,37 +810,16 @@ function _coefficients_normal(N::SubquoModule{T}, p::FaceQ, Bp) where {T <: Mono
             end
           end
           push!(C_bF, c_r)
-          push!(R_bF, r)
         end
       end
     end
 
-    #get kernel of coefficient matrix -> K
-    if !is_empty(C_bF)
-      _K = matrix(k, hcat(C_bF...))
-      K = kernel(_K)
-    else
-      K = identity_matrix(k, ngens(N))
-    end
-
-    #get kernel of coefficient vector of b -> B
-    _B = matrix(k, 1, length(c_b), c_b)
-    B = kernel(transpose(_B))
-
-    #get \lambda_b
-    rows_K = [K[i, :] for i in 1:nrows(K)]
-    l = rank(B)
-    possible_rows = Vector{Vector{elem_type(k)}}()
-    for c_K in rows_K
-      B_K = vcat(B, matrix(k, 1, ngens(N), c_K))
-      if rank(B_K)>l
-        push!(possible_rows, c_K)
-      end
-    end
-    if !is_empty(possible_rows)
-      push!(lambda, possible_rows[1])
-    end
+    push!(degs, degree(Vector{Int}, b))
+    push!(c_bs, c_b)
+    push!(C_rows, C_bF)
   end
+
+  lambda = _dual_basis_lambdas(k, ngens(N), p, degs, c_bs, C_rows)
   return Bp, matrix(kQ, map(kQ, hcat(lambda...)))
 end
 
@@ -797,8 +828,11 @@ function _coefficients_non_normal(N::SubquoModule{T}, p::FaceQ, Bp) where {T <: 
   kQ = base_ring(N)
   k = coefficient_ring(kQ)
 
-  lambda = Vector{Vector{elem_type(k)}}()
-  _Bp = Vector{SubquoModuleElem{T}}()
+  degs = Vector{Vector{Int}}()
+  c_bs = Vector{Vector{elem_type(k)}}()
+  C_rows = Vector{Vector{Vector{elem_type(k)}}}()
+  # use saturation for monomial_basis since degrees may not be in Q
+  kQsat = saturation(kQ)
   for b in Bp
     #get coefficient vector w.r.t. generators of N
     c_b = coefficients_wrt_generators(b, N)
@@ -812,11 +846,7 @@ function _coefficients_non_normal(N::SubquoModule{T}, p::FaceQ, Bp) where {T <: 
     #get all b-relevant relations w.r.t. F
     rel_rels = relevant_relations(N, p, b, c_b)
 
-    R_bF = Vector{FreeModElem{elem_type(kQ)}}()
     C_bF = Vector{Vector{elem_type(k)}}()
-    # use saturation for monomial_basis since degrees may not be in Q
-    kQsat = saturation(kQ)
-    phi = saturation_map(kQ)
     x_rel_gens = [monomial_basis(kQsat, degree(g))[1] for g in rel_gens]
     for r in rel_rels
       x_r = monomial_basis(kQsat, degree(r))[1]
@@ -848,42 +878,20 @@ function _coefficients_non_normal(N::SubquoModule{T}, p::FaceQ, Bp) where {T <: 
         end
         if !is_zero(c_r)
           push!(C_bF, c_r)
-          push!(R_bF, r)
         end
       end
     end
 
-    #get kernel of coefficient matrix -> K
-    if !is_empty(C_bF)
-      _K = matrix(k, hcat(C_bF...))
-      K = kernel(_K)
-    else
-      K = identity_matrix(k, ngens(N))
-    end
-
-    #get kernel of coefficient vector of b -> B
-    _B = matrix(k, 1, length(c_b), c_b)
-    B = kernel(transpose(_B))
-
-    #get \lambda_b
-    rows_K = [K[i, :] for i in 1:nrows(K)]
-    l = rank(B)
-    possible_rows = Vector{Vector{elem_type(k)}}()
-    for c_K in rows_K
-      B_K = vcat(B, matrix(k, 1, ngens(N), c_K))
-      if rank(B_K)>l
-        push!(possible_rows, c_K)
-      end
-    end
-    if !is_empty(possible_rows)
-      push!(lambda, possible_rows[1])
-      push!(_Bp, b)
-    end
+    push!(degs, degree(Vector{Int}, b))
+    push!(c_bs, c_b)
+    push!(C_rows, C_bF)
   end
-  if is_empty(_Bp)
-    return _Bp, matrix(kQ, zeros(kQ, 1, 1))
+
+  if is_empty(Bp)
+    return Bp, matrix(kQ, zeros(kQ, 1, 1))
   end
-  return _Bp, matrix(kQ, map(kQ, hcat(lambda...)))
+  lambda = _dual_basis_lambdas(k, ngens(N), p, degs, c_bs, C_rows)
+  return Bp, matrix(kQ, map(kQ, hcat(lambda...)))
 end
 
 @doc raw"""
