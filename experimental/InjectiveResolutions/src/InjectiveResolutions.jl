@@ -212,7 +212,7 @@ end
 
 struct IrrRes # irreducible resolution (including all computed data and the cochain complex)
   mod::SubquoModule
-  irr_sums::Vector{InjMod}
+  irr_sums::Vector{IrrSum}
   cochain_maps::Vector{SubQuoHom}
   cochain_complex::ComplexOfMorphisms # if sequence not exact return trivial cochain_complex (M0 -> M0)
 end
