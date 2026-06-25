@@ -123,6 +123,7 @@ export compute_shift_bound
 export InjMod
 export IndecInj
 export irreducible_hull
+export kQ_module
 export injective_hull
 export Q_graded_part
 export mod_quotient
@@ -159,7 +160,7 @@ struct IndecInj #indecomposable injective
   face::FaceQ
   vector::Vector{Int}
 end
-mutable struct InjMod #ZZ^d i-graded injective module over monoid algebra
+mutable struct InjMod #ZZ^d-graded injective module over monoid algebra
   monoid_algebra::MonoidAlgebra
   indec_injectives::Vector{IndecInj}
   Q_graded_part::Union{SubquoModule,Nothing}
@@ -169,27 +170,46 @@ mutable struct InjMod #ZZ^d i-graded injective module over monoid algebra
   end
 end
 
+mutable struct IrrSum #direct sum of modules k[Q]/W, where W is an irreducible ideal
+  monoid_algebra::MonoidAlgebra
+  indec_injectives::Vector{IndecInj}
+  kQ_module::Union{SubquoModule,Nothing}
+
+  function IrrSum(A::MonoidAlgebra,I::Vector{IndecInj})
+    return new(A,I,nothing)
+  end
+end
+
+function kQ_module(I::IrrSum)
+  if I.kQ_module === nothing
+    I.kQ_module = compute_Q_graded_part(I.monoid_algebra, I.indec_injectives)
+  end
+  return I.kQ_module
+end
+
 function Q_graded_part(I::InjMod)
   if I.Q_graded_part === nothing
-    I.Q_graded_part = compute_Q_graded_part(I)
+    I.Q_graded_part = compute_Q_graded_part(I.monoid_algebra, I.indec_injectives)
   end
   return I.Q_graded_part
 end
 
-function compute_Q_graded_part(I::InjMod)
-  kQ = I.monoid_algebra
-  if isempty(I.indec_injectives)
+function compute_Q_graded_part(kQ::MonoidAlgebra, I::Vector{IndecInj})
+  if isempty(I)
     F = graded_free_module(kQ, 0)
     return quo(F, [zero(F)])[1]
   end
   if is_normal(kQ)
-    irreducible_ideals = [_get_irreducible_ideal(kQ, J) for J in I.indec_injectives]
+    irreducible_ideals = [_get_irreducible_ideal(kQ, J) for J in I]
   else
-    irreducible_ideals = [_get_irreducible_ideal_unsaturated(kQ, J) for J in I.indec_injectives]
+    irreducible_ideals = [_get_irreducible_ideal_unsaturated(kQ, J) for J in I]
   end
   irreducible_comp = [quotient_ring_as_module(Ji) for Ji in irreducible_ideals]
+
+  isone(length(irreducible_comp)) && return irreducible_comp[1]
   return direct_sum(irreducible_comp..., task=:none)
 end
+
 struct IrrRes # irreducible resolution (including all computed data and the cochain complex)
   mod::SubquoModule
   irr_sums::Vector{InjMod}
@@ -201,6 +221,12 @@ end
 function +(I::InjMod, J::InjMod)
   @req I.monoid_algebra == J.monoid_algebra "monoid algebras not the same"
   return InjMod(I.monoid_algebra, vcat(I.indec_injectives, J.indec_injectives))
+end
+
+#direct sum of two injective modules over the same monoid algebra
+function +(I::IrrSum, J::IrrSum)
+  @req I.monoid_algebra == J.monoid_algebra "monoid algebras not the same"
+  return IrrSum(I.monoid_algebra, vcat(I.indec_injectives, J.indec_injectives))
 end
 
 struct InjRes #ZZ^d-graded injective resolution
@@ -227,6 +253,24 @@ function Base.show(io::IO, ::MIME"text/plain", J::InjMod)
     io,
     "over ",
     J.monoid_algebra
+  )
+end
+
+function Base.show(io::IO,W::IrrSum)
+  print(
+    io, "irreducible sum given by direct sum of ", length(W.indec_injectives)," components"
+  )
+end
+
+function Base.show(io::IO, ::MIME"text/plain", W::IrrSum)
+  println(io, "irreducible sum given by direct sum of components")
+  for Ji in W.indec_injectives
+    println(io, "  k{", Ji.vector, " + F - Q}_Q, where p_F = ", Ji.face.prime)
+  end
+  print(
+    io,
+    "over ",
+    W.monoid_algebra
   )
 end
 
@@ -929,7 +973,7 @@ function irreducible_hull(Mi::SubquoModule{<:MonoidAlgebraElem}, j=0)
     end
   end
   # return summands, hcat(lambda...)
-  return InjMod(kQ,summands), hcat(lambda...)
+  return IrrSum(kQ,summands), hcat(lambda...)
 end
 
 @doc raw"""
@@ -1158,7 +1202,7 @@ function irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{I
 
   #initialize
   gi = identity_map(Mi)
-  irreducible_sums = Vector{InjMod}()
+  irreducible_sums = Vector{IrrSum}()
   cochain_maps = Vector{SubQuoHom}()
 
   j = 1
@@ -1167,7 +1211,7 @@ function irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{I
     Ji, _lambda = irreducible_hull(Mi, j)
     
     #get Q-graded part
-    Wi = Q_graded_part(Ji)
+    Wi = kQ_module(Ji)
 
     #multiply rows of lambda by degrees of generators of Mi
     m, n = size(_lambda)
@@ -1580,6 +1624,7 @@ export compute_shift_bound
 export InjMod
 export IndecInj
 export irreducible_hull
+export kQ_module
 export injective_hull
 export Q_graded_part
 export mod_quotient
