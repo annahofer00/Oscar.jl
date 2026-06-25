@@ -575,13 +575,14 @@ monoid algebra over rational field with cone of dimension 2
 ```
 """
 function monoid_algebra(M_Q::Matrix{Int}, k::Field)
-  @assert all(M_Q .>= 0) "the given matrix must have non-negative entries"
   d = size(M_Q, 1)
 
-  # construct k[t_1,...,t_d]
   t_vars = [Symbol("t_$i") for i in 1:d]
-  T, t = graded_polynomial_ring(k, t_vars; cached = false)
-
+  if all(M_Q .>= 0)
+    T, t = graded_polynomial_ring(k, t_vars; cached = false)
+  else
+    T, t = laurent_polynomial_ring(k, t_vars) 
+  end
   # construct k[x_1,...,x_n] where n is the number of columns/generators
   x_vars = [Symbol("x_$i") for i in 1:size(M_Q, 2)]
   R, _ = graded_polynomial_ring(
