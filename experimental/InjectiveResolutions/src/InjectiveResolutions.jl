@@ -824,10 +824,13 @@ function _coefficients_normal(N::SubquoModule{T}, p::FaceQ, Bp) where {T <: Mono
     #get all relevant generators of N, i.e., check (deg(b) + ZF) \cap (deg(g) + Q) ≠ ∅
     b_p = convex_hull(degree(Vector{Int}, b))
     G_b = Vector{SubquoModuleElem}()
-    for g_N in filter(!is_zero, gens(N))
+    G_b_indices = Vector{Int}()  # original generator indices into gens(N)
+    for (g_idx, g_N) in enumerate(gens(N))
+      is_zero(g_N) && continue
       g_p = convex_hull(degree(Vector{Int}, g_N))
       if dim(intersect(b_p + p.poly + (-1)*p.poly, g_p + cone(kQ))) >= 0
         push!(G_b, g_N)
+        push!(G_b_indices, g_idx)
       end
     end
     x_Gb = [monomial_basis(kQ, degree(g))[1] for g in G_b]
@@ -846,7 +849,7 @@ function _coefficients_normal(N::SubquoModule{T}, p::FaceQ, Bp) where {T <: Mono
           _c_r = coordinates(_N(_r))
           c_r = Vector{elem_type(k)}()
           for i in 1:ngens(N)
-            j = findfirst(g -> g == N[i], G_b)
+            j = findfirst(==(i), G_b_indices)
             if j !== nothing
               push!(c_r, evaluate(_c_r[j], [1 for _ in 1:ngens(kQ)]))
             else
@@ -1231,20 +1234,12 @@ function irreducible_resolution(M::SubquoModule{<:MonoidAlgebraElem}, i::Union{I
     #get boundary map W{i-1} -> Wi
     hi = gi*fi
 
-    #compute cokernel and then simplify
-    Mi_, gi_ = quo(Wi, image(hi)[1]) #cokernel
-    #TODO: do we need this step??
-    Mi, ji = prune_with_map(Mi_)
-    gi = gi_*inv(ji)
-
-    # Mi = Mi_
-    # gi = gi_
-
-    any(is_zero, relations(Mi)) && error("there must not be trivial relations")
-    #fix modules with "zero" relations
-    if length(filter(is_zero, relations(Mi))) > 0
-      Mi, h = fix_module(Mi)
-      gi = gi*h
+    #compute cokernel, filtering zero image generators to avoid trivial relations
+    nz_img_gens = filter(!is_zero, [hi(g) for g in gens(domain(hi))])
+    if isempty(nz_img_gens)
+      Mi, gi = Wi, identity_map(Wi)
+    else
+      Mi, gi = quo(Wi, sub(Wi, nz_img_gens)[1])
     end
 
     push!(irreducible_sums, Ji)
