@@ -238,6 +238,42 @@ struct InjRes #ZZ^d-graded injective resolution
   shift::Vector{Int} #not needed
 end
 
+struct MonomialMatrix{T <: Union{InjMod, IrrSum}} # monomial matrix as in [HM05]
+  matrix::MatElem
+  source::T
+  target::T
+  index::Int  # cohomological index i of the differential d^i
+end
+
+function Base.show(io::IO, mm::MonomialMatrix{InjMod})
+  print(io, "monomial matrix for I^", mm.index, " -> I^", mm.index + 1)
+end
+
+function Base.show(io::IO, mm::MonomialMatrix{IrrSum})
+  print(io, "monomial matrix for W^", mm.index, " -> W^", mm.index + 1)
+end
+
+function _show_indec(io::IO, J::IndecInj, ::Type{InjMod})
+  println(io, "  k{", J.vector, " + F - Q}, where p_F = ", J.face.prime)
+end
+function _show_indec(io::IO, J::IndecInj, ::Type{IrrSum})
+  println(io, "  k{", J.vector, " + F - Q}_Q, where p_F = ", J.face.prime)
+end
+
+function Base.show(io::IO, ::MIME"text/plain", mm::MonomialMatrix{T}) where T
+  src_label, tgt_label = T == InjMod ? ("I^$(mm.index)", "I^$(mm.index + 1)") : ("W^$(mm.index)", "W^$(mm.index + 1)")
+  println(io, "monomial matrix for $src_label -> $tgt_label")
+  println(io, "source summands ($src_label):")
+  for J in mm.source.indec_injectives
+    _show_indec(io, J, T)
+  end
+  println(io, "target summands ($tgt_label):")
+  for J in mm.target.indec_injectives
+    _show_indec(io, J, T)
+  end
+  print(io, mm.matrix)
+end
+
 function Base.show(io::IO,J::InjMod)
   print(
     io, "injective module given by direct sum of ", length(J.indec_injectives)," indecomposable injectives"
@@ -305,11 +341,40 @@ function Base.show(io::IO, ::MIME"text/plain", res::IrrRes)
     end
   end
   println(io, "of ", res.mod)
-  print(
-    io,
-    "over ",
-    base_ring(res.mod)
-  )
+  print(io, "over ", base_ring(res.mod))
+end
+
+@doc raw"""
+    monomial_matrix(i::Int, res::IrrRes)
+    monomial_matrix(i::Int, res::InjRes)
+
+Return the differential $d^i$ of the (co)chain complex of `res` as a
+[`MonomialMatrix`](@ref): the matrix of the map together with its row and column
+labels, i.e. the `(face, degree)` data of the source and target summands.
+
+Here `i` is the cohomological degree of the differential
+$d^i \colon W^i \to W^{i+1}$ (resp. $J^i \to J^{i+1}$).
+"""
+function monomial_matrix(i::Int, res::IrrRes)
+  n = length(res.irr_sums)
+  @req 0 <= i <= n - 2 "cohomological index i must be in 0:$(n - 2) for this resolution"
+  A = matrix(res.cochain_maps[i + 2])
+  src = res.irr_sums[i + 1]
+  tgt = res.irr_sums[i + 2]
+  @assert nrows(A) == length(src.indec_injectives) "row count $(nrows(A)) ≠ number of source summands $(length(src.indec_injectives))"
+  @assert ncols(A) == length(tgt.indec_injectives) "column count $(ncols(A)) ≠ number of target summands $(length(tgt.indec_injectives))"
+  return MonomialMatrix(A, src, tgt, i)
+end
+
+function monomial_matrix(i::Int, res::InjRes)
+  maxi = min(length(res.cochain_maps), length(res.inj_mods)) - 2
+  @req 0 <= i <= maxi "cohomological index i must be in 0:$maxi for this resolution"
+  A = res.cochain_maps[i + 2]
+  src = res.inj_mods[i + 1]
+  tgt = res.inj_mods[i + 2]
+  @assert nrows(A) == length(src.indec_injectives) "row count $(nrows(A)) ≠ number of source summands $(length(src.indec_injectives))"
+  @assert ncols(A) == length(tgt.indec_injectives) "column count $(ncols(A)) ≠ number of target summands $(length(tgt.indec_injectives))"
+  return MonomialMatrix(A, src, tgt, i)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", Ji::IndecInj)
